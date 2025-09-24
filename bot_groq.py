@@ -115,18 +115,26 @@ def llm_text(messages, model):
     return resp.choices[0].message.content.strip()
 
 def llm_vision(system_prompt: str, image_url: str, user_prompt: str):
-    resp = client.chat.completions.create(
-        model=VISION_MODEL,
-        messages=[
-            {"role": "system", "content": system_prompt},
-            {"role": "user", "content": [
-                {"type": "text", "text": user_prompt},
-                {"type": "image_url", "image_url": {"url": image_url}}
-            ]}
-        ],
-        temperature=0.4,
-    )
-    return resp.choices[0].message.content.strip()
+    last_err = None
+    for model_name in VISION_FALLBACKS:
+        try:
+            resp = client.chat.completions.create(
+                model=model_name,
+                messages=[
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": [
+                        {"type": "text", "text": user_prompt},
+                        {"type": "image_url", "image_url": {"url": image_url}}
+                    ]}
+                ],
+                temperature=0.4,
+            )
+            return resp.choices[0].message.content.strip()
+        except Exception as e:
+            last_err = e
+            # пробуем следующую модель
+            continue
+    raise last_err
 
 # ---- COMMANDS ----
 @dp.message(CommandStart())
