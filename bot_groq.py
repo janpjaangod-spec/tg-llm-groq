@@ -4,6 +4,7 @@ from aiogram import Bot, Dispatcher, F
 from aiogram.filters import Command, CommandStart
 from aiogram.types import Message
 from aiogram.enums import ParseMode
+from aiogram.client.default import DefaultBotProperties   # <— добавили
 from groq import Groq
 
 TG = os.getenv("TELEGRAM_BOT_TOKEN")
@@ -12,8 +13,16 @@ MODEL = os.getenv("GROQ_MODEL", "llama-3.1-8b-instant")
 ADMIN_IDS = {int(x.strip()) for x in os.getenv("ADMIN_IDS","").split(",") if x.strip().isdigit()}
 SYSTEM_DEFAULT = os.getenv("DEFAULT_SYSTEM_PROMPT", "You are a helpful assistant in Russian. Be concise.")
 
-bot = Bot(TG, parse_mode=ParseMode.HTML)
+if not TG:
+    raise RuntimeError("TELEGRAM_BOT_TOKEN is not set")
+if not GROQ_KEY:
+    raise RuntimeError("GROQ_API_KEY is not set")
+
+# В aiogram 3.7+ parse_mode задаётся через default=DefaultBotProperties(...)
+bot = Bot(TG, default=DefaultBotProperties(parse_mode=ParseMode.HTML))
 dp = Dispatcher()
+client = Groq(api_key=GROQ_KEY)
+
 client = Groq(api_key=GROQ_KEY)
 
 DB = "bot.db"
