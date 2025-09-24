@@ -1,0 +1,4 @@
+aiogram==3.12.0
+python-dotenv==1.0.1
+groq==0.11.0
+sqlite-utils==3.36
