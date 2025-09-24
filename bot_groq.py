@@ -120,6 +120,17 @@ def db_add_history(user_id: str, role: str, content: str):
                      )""", (user_id, user_id))
         conn.commit()
 
+def db_get_history(user_id: str):
+    with closing(sqlite3.connect(DB)) as conn:
+        c = conn.cursor()
+        c.execute(
+            "SELECT role, content FROM history WHERE user_id=? ORDER BY ts ASC",
+            (user_id,),
+        )
+        rows = c.fetchall()
+    return [{"role": r, "content": t} for (r, t) in rows]
+
+
 def db_add_chat_message(chat_id: int, role: str, content: str):
     now = time.time()
     with closing(sqlite3.connect(DB)) as conn:
