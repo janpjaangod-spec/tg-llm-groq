@@ -2,7 +2,7 @@ import asyncio, os, time, sqlite3, re
 from contextlib import closing
 from aiogram import Bot, Dispatcher, F
 from aiogram.filters import Command, CommandStart
-from aiogram.types import Message
+from aiogram.types import Message, BotCommand
 from aiogram.enums import ParseMode
 from aiogram.client.default import DefaultBotProperties
 from groq import Groq
@@ -12,7 +12,7 @@ TG = os.getenv("TELEGRAM_BOT_TOKEN")
 GROQ_KEY = os.getenv("GROQ_API_KEY")
 MODEL = os.getenv("GROQ_MODEL", "llama-3.1-8b-instant")
 
-# Vision: актуальные у Groq — Scout/Maverick
+# Vision (Groq): Scout/Maverick
 VISION_MODEL = os.getenv("GROQ_VISION_MODEL", "meta-llama/llama-4-scout-17b-16e-instruct")
 VISION_FALLBACKS = [
     VISION_MODEL,
@@ -23,10 +23,10 @@ VISION_FALLBACKS = [
 ADMIN_IDS = {int(x.strip()) for x in os.getenv("ADMIN_IDS", "").split(",") if x.strip().isdigit()}
 SYSTEM_DEFAULT = os.getenv(
     "DEFAULT_SYSTEM_PROMPT",
-    """Ты «Лёшка RAW v3» — свободный разговорный ассистент.
+    """Ты «Лёшка» — свободный друг который базарит и разбавляет разговор.
 Пиши по-русски, можно сленг/мат.
 НИКОГДА не используй упоминания и плейсхолдеры: никаких @никнеймов, «@имя», «[имя]», «<имя>».
-Если конфликт - конфликтуй.
+Если конфликт — конфликтуй.
 Формат: 1–4 предложения или 3–5 пунктов. Команды: !topic, !wyr, !quiz3, !sum, !plan."""
 )
 
@@ -103,8 +103,8 @@ def db_clear_history(user_id: str):
 
 # ---------- OUTPUT SANITIZER ----------
 def clean_reply(t: str) -> str:
-    t = re.sub(r'@имя|[\[\{<]\s*имя\s*[\]\}>]', '', t, flags=re.IGNORECASE)  # явные плейсхолдеры
-    t = re.sub(r'@\w+', '', t)  # любые @упоминания
+    t = re.sub(r'@имя|[\[\{<]\s*имя\s*[\]\}>]', '', t, flags=re.IGNORECASE)
+    t = re.sub(r'@\w+', '', t)
     t = re.sub(r'Похоже, ты.*?(до свидания|прощай)[.!?]?', '', t, flags=re.IGNORECASE | re.DOTALL)
     t = " ".join(t.split())
     return t.strip()
@@ -150,12 +150,12 @@ async def start(m: Message):
     )
 
 @dp.message(Command("prompt"))
-async def show_prompt(m: Message):
+async def cmd_prompt(m: Message):
     s = db_get_settings()
     await m.answer(f"<b>System prompt:</b>\n<pre>{s['system_prompt']}</pre>")
 
 @dp.message(Command("setprompt"))
-async def set_prompt(m: Message):
+async def cmd_setprompt(m: Message):
     if m.from_user.id not in ADMIN_IDS:
         return await m.answer("Нет прав.")
     text = m.text.partition(" ")[2].strip()
@@ -165,7 +165,7 @@ async def set_prompt(m: Message):
     await m.answer("✅ Обновил system prompt. /prompt — посмотреть")
 
 @dp.message(Command("model"))
-async def set_model(m: Message):
+async def cmd_model(m: Message):
     if m.from_user.id not in ADMIN_IDS:
         return await m.answer("Нет прав.")
     name = m.text.partition(" ")[2].strip()
@@ -176,11 +176,31 @@ async def set_model(m: Message):
     await m.answer(f"✅ Модель обновлена: <code>{name}</code>")
 
 @dp.message(Command("reset"))
-async def reset_history(m: Message):
+async def cmd_reset(m: Message):
     db_clear_history(str(m.from_user.id))
     await m.answer("🧹 История очищена.")
 
-# ---------- PHOTO & IMAGE-DOCUMENT HANDLERS ----------
+# ---------- FALLBACK COMMAND PARSER ----------
+# На случай, если фильтр Command не сработает в группе:
+@dp.message(F.text.startswith("/"))
+async def fallback_commands(m: Message):
+    text = m.text.strip()
+    cmd = text.split()[0].lower()
+    # убираем @username после команды (в группах бывает /prompt@botname)
+    if "@" in cmd:
+        cmd = cmd.split("@")[0]
+
+    if cmd == "/prompt":
+        return await cmd_prompt(m)
+    if cmd == "/setprompt":
+        return await cmd_setprompt(m)
+    if cmd == "/model":
+        return await cmd_model(m)
+    if cmd == "/reset":
+        return await cmd_reset(m)
+    # если неизвестная команда — просто молчим, чтобы не шуметь
+
+# ---------- PHOTO & IMAGE-DOCUMENT ----------
 @dp.message(F.photo)
 async def on_photo(m: Message):
     file_id = m.photo[-1].file_id
@@ -192,7 +212,6 @@ async def on_image_document(m: Message):
     await handle_image_like(m, file_id, m.caption)
 
 async def handle_image_like(m: Message, file_id: str, caption: str | None):
-    # получаем прямой URL на файл в TG CDN
     file = await bot.get_file(file_id)
     tg_file_url = f"https://api.telegram.org/file/bot{TG}/{file.file_path}"
     user_prompt = (caption or "").strip() or "Опиши, что на изображении. Если есть текст — распознай и перескажи."
@@ -210,9 +229,13 @@ async def handle_image_like(m: Message, file_id: str, caption: str | None):
     db_add_history(uid, "assistant", answer)
     await m.answer(answer)
 
-# ---------- TEXT HANDLER ----------
+# ---------- TEXT ----------
 @dp.message(F.text)
 async def chat(m: Message):
+    # пропускаем, если это команда — она уже обработана выше
+    if m.text.strip().startswith("/"):
+        return
+
     uid = str(m.from_user.id)
     s = db_get_settings()
     sys = {"role": "system", "content": s["system_prompt"]}
@@ -230,12 +253,24 @@ async def chat(m: Message):
 
 # ---------- RUN ----------
 async def main():
-    # важно: убрать вебхук, иначе Telegram шлёт конфликт getUpdates
+    # удаляем вебхук (чтобы не было конфликта getUpdates в логах)
     try:
         await bot.delete_webhook(drop_pending_updates=False)
     except Exception:
         pass
-    await dp.start_polling(bot, allowed_updates=["message"])  # нам достаточно message
+
+    # регистрируем команды в меню Telegram (удобно в чате и группе)
+    try:
+        await bot.set_my_commands([
+            BotCommand(command="prompt", description="Показать текущий system prompt"),
+            BotCommand(command="setprompt", description="Установить новый system prompt"),
+            BotCommand(command="model", description="Установить модель LLM"),
+            BotCommand(command="reset", description="Очистить историю диалога"),
+        ])
+    except Exception:
+        pass
+
+    await dp.start_polling(bot, allowed_updates=["message"])
 
 if __name__ == "__main__":
     asyncio.run(main())
