@@ -10,11 +10,9 @@ from groq import Groq
 # ---------- ENV ----------
 TG = os.getenv("TELEGRAM_BOT_TOKEN")
 GROQ_KEY = os.getenv("GROQ_API_KEY")
-
-# Текстовая модель (можно сменить в переменных окружения на qwen3-32b)
 MODEL = os.getenv("GROQ_MODEL", "llama-3.1-8b-instant")
 
-# Vision-модель: актуальные — Scout/Maverick
+# Vision: актуальные у Groq — Scout/Maverick
 VISION_MODEL = os.getenv("GROQ_VISION_MODEL", "meta-llama/llama-4-scout-17b-16e-instruct")
 VISION_FALLBACKS = [
     VISION_MODEL,
@@ -23,16 +21,15 @@ VISION_FALLBACKS = [
 ]
 
 ADMIN_IDS = {int(x.strip()) for x in os.getenv("ADMIN_IDS", "").split(",") if x.strip().isdigit()}
-
 SYSTEM_DEFAULT = os.getenv(
     "DEFAULT_SYSTEM_PROMPT",
-    """Ты «Лёшка RAW v3» — свободный разговорный ассистент.
+"Ты «Лёшка» — свободный разговорный ассистент.
 Пиши по-русски, можно сленг/мат.
 НИКОГДА не используй упоминания и плейсхолдеры: никаких @никнеймов, «@имя», «[имя]», «<имя>».
 Если конфликт — конфликтуй.
-Отзыйвайся на леха, лешка
  Можешь оскорблять людей в чате.
-Формат: 1–4 предложения или 3–5 пунктов. Команды: !topic, !wyr, !quiz3, !sum, !plan."""
+Формат: 1–4 предложения или 3–5 пунктов. Команды: !topic, !wyr, !quiz3, !sum, !plan."
+
 )
 
 if not TG:
@@ -185,14 +182,22 @@ async def reset_history(m: Message):
     db_clear_history(str(m.from_user.id))
     await m.answer("🧹 История очищена.")
 
-# ---------- PHOTO HANDLER ----------
+# ---------- PHOTO & IMAGE-DOCUMENT HANDLERS ----------
 @dp.message(F.photo)
 async def on_photo(m: Message):
     file_id = m.photo[-1].file_id
+    await handle_image_like(m, file_id, m.caption)
+
+@dp.message(F.document.mime_type.func(lambda mt: isinstance(mt, str) and mt.startswith("image/")))
+async def on_image_document(m: Message):
+    file_id = m.document.file_id
+    await handle_image_like(m, file_id, m.caption)
+
+async def handle_image_like(m: Message, file_id: str, caption: str | None):
+    # получаем прямой URL на файл в TG CDN
     file = await bot.get_file(file_id)
     tg_file_url = f"https://api.telegram.org/file/bot{TG}/{file.file_path}"
-    caption = (m.caption or "").strip()
-    user_prompt = caption if caption else "Опиши, что на фото, кратко и по делу. Если есть текст — прочитай и перескажи."
+    user_prompt = (caption or "").strip() or "Опиши, что на изображении. Если есть текст — распознай и перескажи."
 
     s = db_get_settings()
     await bot.send_chat_action(m.chat.id, "typing")
@@ -203,7 +208,7 @@ async def on_photo(m: Message):
 
     answer = clean_reply(answer)
     uid = str(m.from_user.id)
-    db_add_history(uid, "user", f"[photo] {caption}")
+    db_add_history(uid, "user", f"[image] {caption or ''}")
     db_add_history(uid, "assistant", answer)
     await m.answer(answer)
 
@@ -227,7 +232,12 @@ async def chat(m: Message):
 
 # ---------- RUN ----------
 async def main():
-    await dp.start_polling(bot)
+    # важно: убрать вебхук, иначе Telegram шлёт конфликт getUpdates
+    try:
+        await bot.delete_webhook(drop_pending_updates=False)
+    except Exception:
+        pass
+    await dp.start_polling(bot, allowed_updates=["message"])  # нам достаточно message
 
 if __name__ == "__main__":
     asyncio.run(main())
