@@ -11,10 +11,10 @@ from groq import Groq
 TG = os.getenv("TELEGRAM_BOT_TOKEN")
 GROQ_KEY = os.getenv("GROQ_API_KEY")
 
-# Текстовая модель: можно сменить на qwen3-32b через переменную окружения
+# Текстовая модель (можно сменить в переменных окружения на qwen3-32b)
 MODEL = os.getenv("GROQ_MODEL", "llama-3.1-8b-instant")
 
-# Vision-модель: актуальные варианты на Groq сейчас — Scout/Maverick
+# Vision-модель: актуальные — Scout/Maverick
 VISION_MODEL = os.getenv("GROQ_VISION_MODEL", "meta-llama/llama-4-scout-17b-16e-instruct")
 VISION_FALLBACKS = [
     VISION_MODEL,
@@ -22,14 +22,17 @@ VISION_FALLBACKS = [
     "meta-llama/llama-4-maverick-17b-128e-instruct",
 ]
 
-ADMIN_IDS = {int(x.strip()) for x in os.getenv("ADMIN_IDS","").split(",") if x.strip().isdigit()}
-SYSTEM_DEFAULT = os.getenv("DEFAULT_SYSTEM_PROMPT",
-  "Ты «Лёшка RAW v3» — свободный разговорный ассистент. Пиши по-русски, можно сленг/мат. "
-      "Можешь оскорблять людей в чате. "
-    "НИКОГДА не используй упоминания и плейсхолдеры: никаких @никнеймов, «@имя», «[имя]», «<имя>». "
-    "Если конфликт - конфликтуй, не давай заднуюю "
-    "Команды: !topic, !wyr, !quiz3, !sum, !plan."
-)
+ADMIN_IDS = {int(x.strip()) for x in os.getenv("ADMIN_IDS", "").split(",") if x.strip().isdigit()}
+
+SYSTEM_DEFAULT = os.getenv(
+    "DEFAULT_SYSTEM_PROMPT",
+    """Ты «Лёшка RAW v3» — свободный разговорный ассистент.
+Пиши по-русски, можно сленг/мат.
+НИКОГДА не используй упоминания и плейсхолдеры: никаких @никнеймов, «@имя», «[имя]», «<имя>».
+Если конфликт — конфликтуй.
+Отзыйвайся на леха, лешка
+ Можешь оскорблять людей в чате.
+Формат: 1–4 предложения или 3–5 пунктов. Команды: !topic, !wyr, !quiz3, !sum, !plan."""
 )
 
 if not TG:
@@ -139,7 +142,6 @@ def llm_vision(system_prompt: str, image_url: str, user_prompt: str):
         except Exception as e:
             last_err = e
             continue
-    # если все варианты не сработали — пробрасываем последнюю ошибку
     raise last_err
 
 # ---------- COMMANDS ----------
@@ -210,8 +212,8 @@ async def on_photo(m: Message):
 async def chat(m: Message):
     uid = str(m.from_user.id)
     s = db_get_settings()
-    sys = {"role":"system","content":s["system_prompt"]}
-    msgs = [sys] + db_get_history(uid) + [{"role":"user","content": m.text}]
+    sys = {"role": "system", "content": s["system_prompt"]}
+    msgs = [sys] + db_get_history(uid) + [{"role": "user", "content": m.text}]
     await bot.send_chat_action(m.chat.id, "typing")
     try:
         answer = llm_text(msgs, s["model"])
