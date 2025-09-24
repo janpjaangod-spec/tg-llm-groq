@@ -1,3 +1,4 @@
+import html
 import asyncio, os, time, sqlite3, re
 from contextlib import closing
 from aiogram import Bot, Dispatcher, F
@@ -152,7 +153,9 @@ async def start(m: Message):
 @dp.message(Command("prompt"))
 async def cmd_prompt(m: Message):
     s = db_get_settings()
-    await m.answer(f"<b>System prompt:</b>\n<pre>{s['system_prompt']}</pre>")
+    esc = html.escape(s["system_prompt"])
+    # Переопределяем parse_mode для этого сообщения, чтобы точно не парсить HTML
+    await m.answer(f"<b>System prompt:</b>\n<pre>{esc}</pre>", parse_mode=ParseMode.HTML)
 
 @dp.message(Command("setprompt"))
 async def cmd_setprompt(m: Message):
