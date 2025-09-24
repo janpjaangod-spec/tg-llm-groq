@@ -2,5 +2,5 @@ aiogram==3.12.0
 python-dotenv==1.0.1
 groq==0.11.0
 sqlite-utils==3.36
-httpx==0.27.2         # <-- фикс
-httpcore==1.0.5       # <-- совместимо с httpx 0.27
+httpx==0.27.2
+httpcore==1.0.5
