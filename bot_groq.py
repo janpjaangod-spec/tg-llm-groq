@@ -25,9 +25,9 @@ AUTO_CHIME_PROB = float(os.getenv("AUTO_CHIME_PROB", "0.00"))
 AUTO_CHIME_COOLDOWN = int(os.getenv("AUTO_CHIME_COOLDOWN", "600"))
 
 # “Разбудить чат” при тишине
-IDLE_CHIME_MINUTES = int(os.getenv("IDLE_CHIME_MINUTES", "45"))      # сколько минут молчания
+IDLE_CHIME_MINUTES = int(os.getenv("IDLE_CHIME_MINUTES", "180"))      # сколько минут молчания
 IDLE_CHIME_COOLDOWN = int(os.getenv("IDLE_CHIME_COOLDOWN", "120"))   # пауза между побудками
-IDLE_CHECK_EVERY = int(os.getenv("IDLE_CHECK_EVERY", "60"))          # как часто проверять, сек
+IDLE_CHECK_EVERY = int(os.getenv("IDLE_CHECK_EVERY", "3600"))          # как часто проверять, сек
 IDLE_MAX_CONTEXT = int(os.getenv("IDLE_MAX_CONTEXT", "30"))          # сколько последних сообщений учитывать
 
 ADMIN_IDS = {int(x.strip()) for x in os.getenv("ADMIN_IDS", "").split(",") if x.strip().isdigit()}
