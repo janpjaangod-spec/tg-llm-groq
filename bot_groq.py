@@ -11,7 +11,7 @@ from groq import Groq
 TG = os.getenv("TELEGRAM_BOT_TOKEN")
 GROQ_KEY = os.getenv("GROQ_API_KEY")
 MODEL = os.getenv("GROQ_MODEL", "llama-3.1-8b-instant")
-VISION_MODEL = os.getenv("GROQ_VISION_MODEL", "llama-3.2-11b-vision-preview")
+VISION_MODEL = os.getenv("GROQ_VISION_MODEL", "llama-3.2-90b-vision-preview")
 ADMIN_IDS = {int(x.strip()) for x in os.getenv("ADMIN_IDS","").split(",") if x.strip().isdigit()}
 SYSTEM_DEFAULT = os.getenv("DEFAULT_SYSTEM_PROMPT",
     "Ты «Лёшка RAW v3» — свободный разговорный ассистент. Пиши по-русски, можно сленг/мат. "
