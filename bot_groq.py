@@ -1,30 +1,37 @@
-import asyncio, os, time, sqlite3
+import asyncio, os, time, sqlite3, re
 from contextlib import closing
 from aiogram import Bot, Dispatcher, F
 from aiogram.filters import Command, CommandStart
 from aiogram.types import Message
 from aiogram.enums import ParseMode
-from aiogram.client.default import DefaultBotProperties   # <— добавили
+from aiogram.client.default import DefaultBotProperties
 from groq import Groq
 
+# ---- ENV ----
 TG = os.getenv("TELEGRAM_BOT_TOKEN")
 GROQ_KEY = os.getenv("GROQ_API_KEY")
 MODEL = os.getenv("GROQ_MODEL", "llama-3.1-8b-instant")
+VISION_MODEL = os.getenv("GROQ_VISION_MODEL", "llama-3.2-11b-vision-preview")
 ADMIN_IDS = {int(x.strip()) for x in os.getenv("ADMIN_IDS","").split(",") if x.strip().isdigit()}
-SYSTEM_DEFAULT = os.getenv("DEFAULT_SYSTEM_PROMPT", "You are a helpful assistant in Russian. Be concise.")
+SYSTEM_DEFAULT = os.getenv("DEFAULT_SYSTEM_PROMPT",
+    "Ты «Лёшка RAW v3» — свободный разговорный ассистент. Пиши по-русски, можно сленг/мат. "
+      "Можешь оскорблять людей в чате. "
+    "НИКОГДА не используй упоминания и плейсхолдеры: никаких @никнеймов, «@имя», «[имя]», «<имя>». "
+    "Если конфликт - конфликтуй, не давай заднуюю "
+    "Команды: !topic, !wyr, !quiz3, !sum, !plan."
+)
 
 if not TG:
     raise RuntimeError("TELEGRAM_BOT_TOKEN is not set")
 if not GROQ_KEY:
     raise RuntimeError("GROQ_API_KEY is not set")
 
-# В aiogram 3.7+ parse_mode задаётся через default=DefaultBotProperties(...)
+# ---- BOT & LLM ----
 bot = Bot(TG, default=DefaultBotProperties(parse_mode=ParseMode.HTML))
 dp = Dispatcher()
 client = Groq(api_key=GROQ_KEY)
 
-client = Groq(api_key=GROQ_KEY)
-
+# ---- DB ----
 DB = "bot.db"
 with closing(sqlite3.connect(DB)) as conn:
     c = conn.cursor()
@@ -45,50 +52,61 @@ with closing(sqlite3.connect(DB)) as conn:
                   (SYSTEM_DEFAULT, MODEL))
     conn.commit()
 
-def get_settings():
+def db_get_settings():
     with closing(sqlite3.connect(DB)) as conn:
         c = conn.cursor()
         c.execute("SELECT system_prompt, model FROM settings WHERE id=1")
-        s = c.fetchone()
-    return {"system_prompt": s[0], "model": s[1]}
+        row = c.fetchone()
+    return {"system_prompt": row[0], "model": row[1]}
 
-def set_prompt(text:str):
+def db_set_system_prompt(text: str):
     with closing(sqlite3.connect(DB)) as conn:
-        c = conn.cursor()
-        c.execute("UPDATE settings SET system_prompt=? WHERE id=1", (text,))
+        conn.execute("UPDATE settings SET system_prompt=? WHERE id=1", (text,))
         conn.commit()
 
-def set_model(name:str):
+def db_set_model(model: str):
     with closing(sqlite3.connect(DB)) as conn:
-        c = conn.cursor()
-        c.execute("UPDATE settings SET model=? WHERE id=1", (name,))
+        conn.execute("UPDATE settings SET model=? WHERE id=1", (model,))
         conn.commit()
 
-def add_hist(uid, role, content):
+def db_add_history(user_id: str, role: str, content: str):
     with closing(sqlite3.connect(DB)) as conn:
         c = conn.cursor()
         c.execute("INSERT INTO history (user_id, role, content, ts) VALUES (?,?,?,?)",
-                  (uid, role, content, time.time()))
+                  (user_id, role, content, time.time()))
         c.execute("""DELETE FROM history
                      WHERE user_id=?
                      AND rowid NOT IN (
                        SELECT rowid FROM history WHERE user_id=? ORDER BY ts DESC LIMIT 20
-                     )""", (uid, uid))
+                     )""", (user_id, user_id))
         conn.commit()
 
-def get_hist(uid):
+def db_get_history(user_id: str):
     with closing(sqlite3.connect(DB)) as conn:
         c = conn.cursor()
-        c.execute("SELECT role, content FROM history WHERE user_id=? ORDER BY ts ASC", (uid,))
-        return [{"role": r, "content": t} for (r,t) in c.fetchall()]
+        c.execute("SELECT role, content FROM history WHERE user_id=? ORDER BY ts ASC", (user_id,))
+        return [{"role": r, "content": t} for (r, t) in c.fetchall()]
 
-def clear_hist(uid):
+def db_clear_history(user_id: str):
     with closing(sqlite3.connect(DB)) as conn:
-        c = conn.cursor()
-        c.execute("DELETE FROM history WHERE user_id=?", (uid,))
+        conn.execute("DELETE FROM history WHERE user_id=?", (user_id,))
         conn.commit()
 
-def llm_reply(messages, model):
+# ---- OUTPUT SANITIZER ----
+def clean_reply(t: str) -> str:
+    # убрать явные плейсхолдеры «имя»
+    t = re.sub(r'@имя|[\[\{<]\s*имя\s*[\]\}>]', '', t, flags=re.IGNORECASE)
+    # убрать любые @упоминания (не пингуем людей в группах)
+    t = re.sub(r'@\w+', '', t)
+    # убрать авто-прощалки
+    t = re.sub(r'Похоже, ты.*?(до свидания|прощай)[.!?]?', '', t,
+               flags=re.IGNORECASE | re.DOTALL)
+    # схлопнуть пробелы
+    t = " ".join(t.split())
+    return t.strip()
+
+# ---- LLM CALLS ----
+def llm_text(messages, model):
     resp = client.chat.completions.create(
         model=model,
         messages=messages,
@@ -96,9 +114,24 @@ def llm_reply(messages, model):
     )
     return resp.choices[0].message.content.strip()
 
+def llm_vision(system_prompt: str, image_url: str, user_prompt: str):
+    resp = client.chat.completions.create(
+        model=VISION_MODEL,
+        messages=[
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": [
+                {"type": "text", "text": user_prompt},
+                {"type": "image_url", "image_url": {"url": image_url}}
+            ]}
+        ],
+        temperature=0.4,
+    )
+    return resp.choices[0].message.content.strip()
+
+# ---- COMMANDS ----
 @dp.message(CommandStart())
 async def start(m: Message):
-    s = get_settings()
+    s = db_get_settings()
     await m.answer(
         "Привет! Я LLM-бот на Groq. Пиши — отвечу.\n\n"
         f"<b>Модель:</b> <code>{s['model']}</code>\n"
@@ -107,49 +140,76 @@ async def start(m: Message):
 
 @dp.message(Command("prompt"))
 async def show_prompt(m: Message):
-    s = get_settings()
+    s = db_get_settings()
     await m.answer(f"<b>System prompt:</b>\n<pre>{s['system_prompt']}</pre>")
 
 @dp.message(Command("setprompt"))
-async def setprompt(m: Message):
+async def set_prompt(m: Message):
     if m.from_user.id not in ADMIN_IDS:
         return await m.answer("Нет прав.")
     text = m.text.partition(" ")[2].strip()
     if not text:
         return await m.answer("Использование: /setprompt <текст>")
-    set_prompt(text)
+    db_set_system_prompt(text)
     await m.answer("✅ Обновил system prompt. /prompt — посмотреть")
 
 @dp.message(Command("model"))
-async def model_cmd(m: Message):
+async def set_model(m: Message):
     if m.from_user.id not in ADMIN_IDS:
         return await m.answer("Нет прав.")
     name = m.text.partition(" ")[2].strip()
     if not name:
-        s = get_settings(); return await m.answer(f"Текущая модель: <code>{s['model']}</code>")
-    set_model(name)
+        s = db_get_settings()
+        return await m.answer(f"Текущая модель: <code>{s['model']}</code>\nИспользование: /model <имя>")
+    db_set_model(name)
     await m.answer(f"✅ Модель обновлена: <code>{name}</code>")
 
 @dp.message(Command("reset"))
-async def reset_cmd(m: Message):
-    clear_hist(str(m.from_user.id))
+async def reset_history(m: Message):
+    db_clear_history(str(m.from_user.id))
     await m.answer("🧹 История очищена.")
 
+# ---- PHOTO HANDLER (vision) ----
+@dp.message(F.photo)
+async def on_photo(m: Message):
+    file_id = m.photo[-1].file_id
+    file = await bot.get_file(file_id)
+    tg_file_url = f"https://api.telegram.org/file/bot{TG}/{file.file_path}"
+    caption = (m.caption or "").strip()
+    user_prompt = caption if caption else "Опиши, что на фото, кратко и по делу. Если есть текст — прочитай и перескажи."
+
+    s = db_get_settings()
+    await bot.send_chat_action(m.chat.id, "typing")
+    try:
+        answer = llm_vision(s["system_prompt"], tg_file_url, user_prompt)
+    except Exception as e:
+        answer = f"Ошибка vision-запроса: {e}"
+
+    answer = clean_reply(answer)
+    uid = str(m.from_user.id)
+    db_add_history(uid, "user", f"[photo] {caption}")
+    db_add_history(uid, "assistant", answer)
+    await m.answer(answer)
+
+# ---- TEXT HANDLER ----
 @dp.message(F.text)
 async def chat(m: Message):
     uid = str(m.from_user.id)
-    s = get_settings()
+    s = db_get_settings()
     sys = {"role":"system","content":s["system_prompt"]}
-    msgs = [sys] + get_hist(uid) + [{"role":"user","content": m.text}]
+    msgs = [sys] + db_get_history(uid) + [{"role":"user","content": m.text}]
     await bot.send_chat_action(m.chat.id, "typing")
     try:
-        answer = llm_reply(msgs, s["model"])
+        answer = llm_text(msgs, s["model"])
     except Exception as e:
         answer = f"Ошибка LLM: {e}"
-    add_hist(uid,"user",m.text)
-    add_hist(uid,"assistant",answer)
+
+    answer = clean_reply(answer)
+    db_add_history(uid, "user", m.text)
+    db_add_history(uid, "assistant", answer)
     await m.answer(answer)
 
+# ---- RUN ----
 async def main():
     await dp.start_polling(bot)
 
