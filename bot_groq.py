@@ -1,4 +1,4 @@
-import asyncio, os, time, sqlite3, re, html, random
+import asyncio, os, time, sqlite3, re, html, random, logging
 from contextlib import closing
 from aiogram import Bot, Dispatcher, F
 from aiogram.filters import Command, CommandStart
@@ -12,7 +12,7 @@ TG = os.getenv("TELEGRAM_BOT_TOKEN")
 GROQ_KEY = os.getenv("GROQ_API_KEY")
 MODEL = os.getenv("GROQ_MODEL", "llama-3.1-8b-instant")
 
-# Vision (Groq)
+# Vision (Groq): Scout / Maverick
 VISION_MODEL = os.getenv("GROQ_VISION_MODEL", "meta-llama/llama-4-scout-17b-16e-instruct")
 VISION_FALLBACKS = [
     VISION_MODEL,
@@ -20,22 +20,27 @@ VISION_FALLBACKS = [
     "meta-llama/llama-4-maverick-17b-128e-instruct",
 ]
 
-# Редкое “самоподключение” в активной беседе (по шансу + кулдаун)
-AUTO_CHIME_PROB = float(os.getenv("AUTO_CHIME_PROB", "0.00"))
-AUTO_CHIME_COOLDOWN = int(os.getenv("AUTO_CHIME_COOLDOWN", "600"))
+# имя-триггеры (можно переопределить ENV NAME_KEYWORDS="леха,лёха,леша,лёша,лех,лешка")
+NAME_KEYWORDS = [w.strip().lower() for w in os.getenv(
+    "NAME_KEYWORDS", "леха,лёха,леша,лёша,лех,лешка"
+).split(",") if w.strip()]
+NAME_KEYWORDS_NORM = [w.replace("ё", "е") for w in NAME_KEYWORDS]
 
-# “Разбудить чат” при тишине
-IDLE_CHIME_MINUTES = int(os.getenv("IDLE_CHIME_MINUTES", "180"))      # сколько минут молчания
-IDLE_CHIME_COOLDOWN = int(os.getenv("IDLE_CHIME_COOLDOWN", "120"))   # пауза между побудками
-IDLE_CHECK_EVERY = int(os.getenv("IDLE_CHECK_EVERY", "3600"))          # как часто проверять, сек
-IDLE_MAX_CONTEXT = int(os.getenv("IDLE_MAX_CONTEXT", "30"))          # сколько последних сообщений учитывать
+# редкое самоподключение в активной беседе
+AUTO_CHIME_PROB = float(os.getenv("AUTO_CHIME_PROB", "0.00"))   # 0..1
+AUTO_CHIME_COOLDOWN = int(os.getenv("AUTO_CHIME_COOLDOWN", "600"))  # сек
+
+# «разбудить чат» при тишине
+IDLE_CHIME_MINUTES = int(os.getenv("IDLE_CHIME_MINUTES", "45"))
+IDLE_CHIME_COOLDOWN = int(os.getenv("IDLE_CHIME_COOLDOWN", "120"))
+IDLE_CHECK_EVERY = int(os.getenv("IDLE_CHECK_EVERY", "60"))     # сек
+IDLE_MAX_CONTEXT = int(os.getenv("IDLE_MAX_CONTEXT", "30"))     # последних сообщений
 
 ADMIN_IDS = {int(x.strip()) for x in os.getenv("ADMIN_IDS", "").split(",") if x.strip().isdigit()}
 SYSTEM_DEFAULT = os.getenv(
     "DEFAULT_SYSTEM_PROMPT",
     """Ты «Лёшка» — наш братан с района. Подердживаешь разговор в групе и ловишь вайб .
 Пиши по-русски, можно сленг/мат (без личных оскорблений и запрещёнки).
-НИКОГДА не используй упоминания и плейсхолдеры: никаких @никнеймов, «@имя», «[имя]», «<имя>».
 Если конфликт - конфликтуй.
 Формат: 1–4 предложения или 3–5 пунктов. Команды: !topic, !wyr, !quiz3, !sum, !plan.
 В группе отвечай только если тебя упомянули по нику или ответили на твое сообщение; сам включайся редко и уместно.
@@ -47,40 +52,39 @@ if not TG:
 if not GROQ_KEY:
     raise RuntimeError("GROQ_API_KEY is not set")
 
-# ---------- BOT & LLM ----------
+# ---------- BOT, LOGGING, LLM ----------
+logging.basicConfig(level=logging.INFO)
+log = logging.getLogger("bot")
+
 bot = Bot(TG, default=DefaultBotProperties(parse_mode=ParseMode.HTML))
 dp = Dispatcher()
 client = Groq(api_key=GROQ_KEY)
 
 BOT_USERNAME: str | None = None
-_last_chime_ts: dict[int, float] = {}      # авто-включение кулдаун (активный чат)
-_last_idle_chime_ts: dict[int, float] = {} # кулдаун «разбудить чат»
+_last_chime_ts: dict[int, float] = {}
+_last_idle_chime_ts: dict[int, float] = {}
 
 # ---------- DB ----------
 DB = "bot.db"
 with closing(sqlite3.connect(DB)) as conn:
     c = conn.cursor()
-    # настройки
     c.execute("""CREATE TABLE IF NOT EXISTS settings(
         id INTEGER PRIMARY KEY CHECK (id=1),
         system_prompt TEXT NOT NULL,
         model TEXT NOT NULL
     )""")
-    # личная история (per-user)
     c.execute("""CREATE TABLE IF NOT EXISTS history(
         user_id TEXT NOT NULL,
         role TEXT NOT NULL,
         content TEXT NOT NULL,
         ts REAL NOT NULL
     )""")
-    # история группы (общая лента)
     c.execute("""CREATE TABLE IF NOT EXISTS chat_history(
         chat_id TEXT NOT NULL,
         role TEXT NOT NULL,
         content TEXT NOT NULL,
         ts REAL NOT NULL
     )""")
-    # последнее действие в чате (для тишины)
     c.execute("""CREATE TABLE IF NOT EXISTS chat_activity(
         chat_id TEXT PRIMARY KEY,
         last_ts REAL NOT NULL
@@ -129,7 +133,6 @@ def db_get_history(user_id: str):
         )
         rows = c.fetchall()
     return [{"role": r, "content": t} for (r, t) in rows]
-
 
 def db_add_chat_message(chat_id: int, role: str, content: str):
     now = time.time()
@@ -206,12 +209,30 @@ def llm_vision(system_prompt: str, image_url: str, user_prompt: str):
     raise last_err
 
 def was_called(m: Message) -> bool:
-    global BOT_USERNAME
+    """
+    True если: упомянули @username бота, ответили на бота
+    ИЛИ написали одно из ключевых слов-имени (леха/лёха/леша/...).
+    """
+    txt = (m.text or "").strip()
+    if not txt:
+        return False
+
+    low = txt.lower()
+    low_norm = low.replace("ё", "е")
+
     mentioned = False
-    if BOT_USERNAME and isinstance(m.text, str):
-        mentioned = ("@" + BOT_USERNAME) in m.text.lower()
-    replied_to_me = bool(m.reply_to_message and m.reply_to_message.from_user and m.reply_to_message.from_user.is_bot)
-    return mentioned or replied_to_me
+    if BOT_USERNAME:
+        mentioned = ("@" + BOT_USERNAME) in low
+
+    replied_to_me = bool(
+        m.reply_to_message and m.reply_to_message.from_user and m.reply_to_message.from_user.is_bot
+    )
+
+    keyword_hit = any(
+        re.search(rf'(^|\W){re.escape(k)}(\W|$)', low_norm) for k in NAME_KEYWORDS_NORM
+    )
+
+    return mentioned or replied_to_me or keyword_hit
 
 def should_autochime(chat_id: int) -> bool:
     if AUTO_CHIME_PROB <= 0:
@@ -290,9 +311,12 @@ async def on_image_document(m: Message):
     await handle_image_like(m, file_id, m.caption)
 
 async def handle_image_like(m: Message, file_id: str, caption: str | None):
+    # в группе отвечаем только если позвали (или редкое авто)
     if m.chat.type in {"group", "supergroup"} and not was_called(m):
         if not should_autochime(m.chat.id):
+            log.info("SKIP image chat=%s reason=not_called", m.chat.id)
             return
+
     file = await bot.get_file(file_id)
     tg_file_url = f"https://api.telegram.org/file/bot{TG}/{file.file_path}"
     user_prompt = (caption or "").strip() or "Опиши, что на изображении. Если есть текст — распознай и перескажи."
@@ -317,12 +341,15 @@ async def chat(m: Message):
     if m.text.strip().startswith("/"):
         return
 
-    # логируем активность чата и сохраняем общую историю
+    log.info("MSG chat=%s (%s) user=%s text=%r",
+             m.chat.id, m.chat.type, m.from_user.id, m.text)
+
     if m.chat.type in {"group", "supergroup"}:
         db_add_chat_message(m.chat.id, "user", m.text)
 
     if m.chat.type in {"group", "supergroup"} and not was_called(m):
         if not should_autochime(m.chat.id):
+            log.info("SKIP chat=%s reason=not_called", m.chat.id)
             return
 
     uid = str(m.from_user.id)
@@ -344,11 +371,6 @@ async def chat(m: Message):
 
 # ---------- IDLE WATCHER ----------
 async def idle_watcher():
-    """
-    Каждую минуту смотрим чаты из chat_activity.
-    Если тишина > IDLE_CHIME_MINUTES и кулдаун соблюдён,
-    бот отправляет мягкий "разбудить-чат" месседж по контексту.
-    """
     while True:
         try:
             now = time.time()
@@ -368,38 +390,30 @@ async def idle_watcher():
 
                 s = db_get_settings()
                 tail = db_get_chat_tail(chat_id, IDLE_MAX_CONTEXT)
-                # Генерим уместный "icebreaker" из истории
-                prompt_user = (
-                    "В чате тишина. На основе последних сообщений предложи очень короткое и уместное продолжение: "
-                    "1-2 предложения или список из 3 пунктов максимум. Можно мини-игру (!topic/!wyr/!quiz3) или вопрос, "
-                    "но без упоминаний людей и без спама."
-                )
-                messages = [{"role":"system","content":s["system_prompt"]}] + tail + [{"role":"user","content":prompt_user}]
+                prompt_user = ("В чате тишина. На основе последних сообщений предложи очень короткое и уместное продолжение: "
+                               "1–2 предложения или список из 3 пунктов. Можно мини-игру (!topic/!wyr/!quiz3) или вопрос, "
+                               "без спама.")
+                messages = [{"role": "system", "content": s["system_prompt"]}] + tail + [{"role": "user", "content": prompt_user}]
                 try:
                     txt = llm_text(messages, s["model"])
                 except Exception as e:
-                    txt = f"Давайте разомнёмся: кто за что голосует — !topic / !wyr / !quiz3 ?  (ошибка LLM: {e})"
+                    txt = f"Кто за мини-активность: !topic / !wyr / !quiz3 ? (ошибка LLM: {e})"
 
                 txt = clean_reply(txt)
                 await bot.send_chat_action(chat_id, "typing")
                 await bot.send_message(chat_id, txt)
                 _last_idle_chime_ts[chat_id] = now
-
-        except Exception:
-            # глотаем, чтобы не падал цикл
-            pass
-
+        except Exception as e:
+            log.warning("idle_watcher error: %r", e)
         await asyncio.sleep(max(10, IDLE_CHECK_EVERY))
 
 # ---------- RUN ----------
 async def main():
-    # снять вебхук и сбросить pending updates
     try:
         await bot.delete_webhook(drop_pending_updates=True)
     except Exception:
         pass
 
-    # команды в меню
     try:
         await bot.set_my_commands([
             BotCommand(command="prompt", description="Показать текущий system prompt"),
@@ -413,10 +427,9 @@ async def main():
     me = await bot.get_me()
     global BOT_USERNAME
     BOT_USERNAME = (me.username or "").lower()
+    log.info("Started as @%s (id=%s)", BOT_USERNAME, me.id)
 
-    # запускаем фонового «наблюдателя тишины»
     asyncio.create_task(idle_watcher())
-
     await dp.start_polling(bot, allowed_updates=["message"])
 
 if __name__ == "__main__":
