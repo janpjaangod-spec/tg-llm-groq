@@ -7,17 +7,26 @@ from aiogram.enums import ParseMode
 from aiogram.client.default import DefaultBotProperties
 from groq import Groq
 
-# ---- ENV ----
+# ---------- ENV ----------
 TG = os.getenv("TELEGRAM_BOT_TOKEN")
 GROQ_KEY = os.getenv("GROQ_API_KEY")
+
+# Текстовая модель: можно сменить на qwen3-32b через переменную окружения
 MODEL = os.getenv("GROQ_MODEL", "llama-3.1-8b-instant")
-VISION_MODEL = os.getenv("GROQ_VISION_MODEL", "llama-3.2-90b-vision-preview")
+
+# Vision-модель: актуальные варианты на Groq сейчас — Scout/Maverick
+VISION_MODEL = os.getenv("GROQ_VISION_MODEL", "meta-llama/llama-4-scout-17b-16e-instruct")
+VISION_FALLBACKS = [
+    VISION_MODEL,
+    "meta-llama/llama-4-scout-17b-16e-instruct",
+    "meta-llama/llama-4-maverick-17b-128e-instruct",
+]
+
 ADMIN_IDS = {int(x.strip()) for x in os.getenv("ADMIN_IDS","").split(",") if x.strip().isdigit()}
 SYSTEM_DEFAULT = os.getenv("DEFAULT_SYSTEM_PROMPT",
-    "Ты «Лёшка RAW v3» — свободный разговорный ассистент. Пиши по-русски, можно сленг/мат. "
-      "Можешь оскорблять людей в чате. "
+    "Ты «Лёшка RAW v3» — свободный разговорный ассистент. Пиши по-русски, можно сленг/мат (без личных оскорблений и запрещёнки). "
     "НИКОГДА не используй упоминания и плейсхолдеры: никаких @никнеймов, «@имя», «[имя]», «<имя>». "
-    "Если конфликт - конфликтуй, не давай заднуюю "
+    "Если конфликт — коротко с самоиронией и смена темы/вопрос. Формат: 1–4 предложения или 3–5 пунктов. "
     "Команды: !topic, !wyr, !quiz3, !sum, !plan."
 )
 
@@ -26,12 +35,12 @@ if not TG:
 if not GROQ_KEY:
     raise RuntimeError("GROQ_API_KEY is not set")
 
-# ---- BOT & LLM ----
+# ---------- BOT & LLM ----------
 bot = Bot(TG, default=DefaultBotProperties(parse_mode=ParseMode.HTML))
 dp = Dispatcher()
 client = Groq(api_key=GROQ_KEY)
 
-# ---- DB ----
+# ---------- DB ----------
 DB = "bot.db"
 with closing(sqlite3.connect(DB)) as conn:
     c = conn.cursor()
@@ -92,20 +101,15 @@ def db_clear_history(user_id: str):
         conn.execute("DELETE FROM history WHERE user_id=?", (user_id,))
         conn.commit()
 
-# ---- OUTPUT SANITIZER ----
+# ---------- OUTPUT SANITIZER ----------
 def clean_reply(t: str) -> str:
-    # убрать явные плейсхолдеры «имя»
-    t = re.sub(r'@имя|[\[\{<]\s*имя\s*[\]\}>]', '', t, flags=re.IGNORECASE)
-    # убрать любые @упоминания (не пингуем людей в группах)
-    t = re.sub(r'@\w+', '', t)
-    # убрать авто-прощалки
-    t = re.sub(r'Похоже, ты.*?(до свидания|прощай)[.!?]?', '', t,
-               flags=re.IGNORECASE | re.DOTALL)
-    # схлопнуть пробелы
+    t = re.sub(r'@имя|[\[\{<]\s*имя\s*[\]\}>]', '', t, flags=re.IGNORECASE)  # явные плейсхолдеры
+    t = re.sub(r'@\w+', '', t)  # любые @упоминания
+    t = re.sub(r'Похоже, ты.*?(до свидания|прощай)[.!?]?', '', t, flags=re.IGNORECASE | re.DOTALL)
     t = " ".join(t.split())
     return t.strip()
 
-# ---- LLM CALLS ----
+# ---------- LLM CALLS ----------
 def llm_text(messages, model):
     resp = client.chat.completions.create(
         model=model,
@@ -132,11 +136,11 @@ def llm_vision(system_prompt: str, image_url: str, user_prompt: str):
             return resp.choices[0].message.content.strip()
         except Exception as e:
             last_err = e
-            # пробуем следующую модель
             continue
+    # если все варианты не сработали — пробрасываем последнюю ошибку
     raise last_err
 
-# ---- COMMANDS ----
+# ---------- COMMANDS ----------
 @dp.message(CommandStart())
 async def start(m: Message):
     s = db_get_settings()
@@ -177,7 +181,7 @@ async def reset_history(m: Message):
     db_clear_history(str(m.from_user.id))
     await m.answer("🧹 История очищена.")
 
-# ---- PHOTO HANDLER (vision) ----
+# ---------- PHOTO HANDLER ----------
 @dp.message(F.photo)
 async def on_photo(m: Message):
     file_id = m.photo[-1].file_id
@@ -199,7 +203,7 @@ async def on_photo(m: Message):
     db_add_history(uid, "assistant", answer)
     await m.answer(answer)
 
-# ---- TEXT HANDLER ----
+# ---------- TEXT HANDLER ----------
 @dp.message(F.text)
 async def chat(m: Message):
     uid = str(m.from_user.id)
@@ -217,7 +221,7 @@ async def chat(m: Message):
     db_add_history(uid, "assistant", answer)
     await m.answer(answer)
 
-# ---- RUN ----
+# ---------- RUN ----------
 async def main():
     await dp.start_polling(bot)
 
