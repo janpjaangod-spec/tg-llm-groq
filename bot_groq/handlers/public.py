@@ -5,7 +5,7 @@ import random
 import time
 
 from bot_groq.config.settings import settings
-from bot_groq.services.database import db_load_person, db_save_person, db_get_message_history
+from bot_groq.services.database import db_load_person, db_save_person, db_get_chat_tail
 from bot_groq.services.llm import llm_text
 from bot_groq.core.profiles import get_user_profile_for_display
 
@@ -226,7 +226,7 @@ async def cmd_stats_public(message: Message):
     """Публичная версия статистики (ограниченная)."""
     try:
         # Получаем только базовую статистику
-        history = db_get_message_history(message.chat.id, limit=100)
+        history = db_get_chat_tail(message.chat.id, limit=100)
         
         if not history:
             await message.reply("Статистики пока нет, слишком мало сообщений.")

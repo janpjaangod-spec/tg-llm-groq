@@ -12,7 +12,7 @@ from enum import Enum
 from abc import ABC, abstractmethod
 
 from bot_groq.config.settings import settings
-from bot_groq.services.database import db_get_reminders, db_remove_reminder, db_add_reminder, db_get_last_activity
+from bot_groq.services.database import db_get_due_reminders, db_delete_reminder, db_add_reminder, db_get_last_activity
 from bot_groq.utils.logging import core_logger
 
 class TaskType(Enum):

@@ -5,14 +5,14 @@ from typing import Dict, List, Any, Optional, Tuple
 from collections import defaultdict
 
 from bot_groq.config.settings import settings
-from bot_groq.services.database import db_get_message_history
+from bot_groq.services.database import db_get_chat_tail
 
 def get_user_clash_summary(chat_id: int, user1_id: int, user2_id: int, limit: int = 50) -> str:
     """
     Анализирует взаимодействие между двумя пользователями.
     """
     # Получаем последние сообщения
-    messages = db_get_message_history(chat_id, limit * 2)
+    messages = db_get_chat_tail(chat_id, limit * 2)
     if not messages:
         return ""
     
@@ -78,7 +78,7 @@ def analyze_group_dynamics(chat_id: int, limit: int = 100) -> Dict[str, Any]:
     """
     Анализирует общую динамику группы.
     """
-    messages = db_get_message_history(chat_id, limit)
+    messages = db_get_chat_tail(chat_id, limit)
     if not messages:
         return {}
     
@@ -123,7 +123,7 @@ def get_group_tension_points(chat_id: int) -> List[str]:
     """
     Ищет точки напряжения в группе.
     """
-    messages = db_get_message_history(chat_id, 50)
+    messages = db_get_chat_tail(chat_id, 50)
     if not messages:
         return []
     
@@ -189,7 +189,7 @@ def find_alliance_opportunities(chat_id: int, target_user_id: int) -> List[Tuple
     """
     Ищет пользователей, которых можно настроить против цели.
     """
-    messages = db_get_message_history(chat_id, 100)
+    messages = db_get_chat_tail(chat_id, 100)
     if not messages:
         return []
     

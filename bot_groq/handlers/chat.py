@@ -7,8 +7,8 @@ import re
 
 from bot_groq.config.settings import settings
 from bot_groq.services.database import (
-    db_save_message, db_load_person, db_save_person, 
-    db_get_message_history, db_get_last_activity
+    db_add_chat_message, db_load_person, db_save_person, 
+    db_get_chat_tail, db_get_last_activity
 )
 from bot_groq.services.llm import llm_text, ai_bit, post_filter
 from bot_groq.core.profiles import update_person_profile, person_prompt_addon
@@ -43,7 +43,7 @@ def should_respond(message: Message, bot_username: str) -> tuple[bool, str]:
         return True, "reply_to_bot"
     
     # Ключевые слова
-    if any(keyword.lower() in text for keyword in settings.name_keywords):
+    if any(keyword.lower() in text for keyword in settings.name_keywords_list):
         return True, "keyword_trigger"
     
     # Вопросы боту
@@ -73,7 +73,7 @@ async def generate_contextual_response(message: Message, trigger_reason: str) ->
     """Генерирует контекстуальный ответ на сообщение."""
     
     # Получаем историю сообщений для контекста
-    history = db_get_message_history(message.chat.id, limit=10)
+    history = db_get_chat_tail(message.chat.id, limit=10)
     
     # Обновляем профиль пользователя
     bot_info = await message.bot.get_me()
@@ -168,7 +168,7 @@ async def handle_text_message(message: Message):
     """Обработчик текстовых сообщений."""
     try:
         # Сохраняем сообщение в базу данных
-        db_save_message(
+        db_add_chat_message(
             chat_id=message.chat.id,
             user_id=message.from_user.id,
             username=message.from_user.username or "",
@@ -191,7 +191,7 @@ async def handle_text_message(message: Message):
                 await message.reply(response)
                 
                 # Сохраняем ответ бота в историю
-                db_save_message(
+                db_add_chat_message(
                     chat_id=message.chat.id,
                     user_id=bot_info.id,
                     username=bot_info.username,

@@ -125,7 +125,7 @@ def update_person_profile(m: Message, bot_username: Optional[str] = None):
         addressed_bot = True
     
     # Проверка ключевых слов
-    if any(k in low for k in [w.replace("ё", "е") for w in settings.name_keywords]):
+    if any(k in low for k in [w.replace("ё", "е") for w in settings.name_keywords_list]):
         addressed_bot = True
     
     # Проверка реплая на бота

@@ -4,8 +4,17 @@ from typing import List, Dict, Any
 
 from bot_groq.config.settings import settings
 
-# Инициализация клиента Groq
-client = Groq(api_key=settings.groq_api_key)
+# Глобальная переменная для клиента Groq
+client = None
+
+def get_groq_client():
+    """Получает клиент Groq с lazy initialization."""
+    global client
+    if client is None:
+        if not settings.groq_api_key:
+            raise ValueError("GROQ_API_KEY не установлен")
+        client = Groq(api_key=settings.groq_api_key)
+    return client
 
 # Vision модели с fallback
 VISION_FALLBACKS = [
@@ -41,7 +50,7 @@ def llm_text(messages: List[Dict[str, Any]], model: str) -> str:
     Отправляет текстовый запрос к LLM и возвращает отфильтрованный ответ.
     """
     try:
-        resp = client.chat.completions.create(
+        resp = get_groq_client().chat.completions.create(
             model=model, 
             messages=messages, 
             temperature=0.7,
@@ -60,7 +69,7 @@ def llm_vision(system_prompt: str, image_url: str, user_prompt: str) -> str:
     last_err = None
     for model_name in VISION_FALLBACKS:
         try:
-            resp = client.chat.completions.create(
+            resp = get_groq_client().chat.completions.create(
                 model=model_name,
                 messages=[
                     {"role": "system", "content": system_prompt},

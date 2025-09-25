@@ -1,5 +1,5 @@
-from typing import List, Set
-from pydantic import Field
+from typing import List, Set, Optional
+from pydantic import Field, field_validator, ValidationInfo, AliasChoices
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 class Settings(BaseSettings):
@@ -8,8 +8,9 @@ class Settings(BaseSettings):
     Значения считываются из переменных окружения.
     """
     # --- Основные ---
-    telegram_bot_token: str = Field(..., description="Токен Telegram бота")
-    groq_api_key: str = Field(..., description="API ключ Groq")
+    bot_token: Optional[str] = Field(None, description="Токен Telegram бота")
+    groq_api_key: Optional[str] = Field(None, description="API ключ Groq")
+    admin_token: Optional[str] = Field(None, description="Токен администратора")
     admin_ids: Set[int] = Field(default_factory=set, description="Множество ID администраторов")
 
     # --- Модели ---
@@ -28,12 +29,19 @@ class Settings(BaseSettings):
     )
 
     # --- Поведение ---
-    name_keywords: List[str] = Field(default_factory=lambda: ["леха", "лёха", "леша", "лёша", "лех", "лешка"], description="Ключевые слова для обращения к боту")
+    name_keywords: str = Field("леха,лёха,леша,лёша,лех,лешка", description="Ключевые слова для обращения к боту (через запятую)")
     auto_chime_prob: float = Field(0.0, description="Вероятность случайного ответа в чате (0.0 до 1.0)")
     auto_chime_cooldown: int = Field(600, description="Пауза между случайными ответами (секунды)")
     auto_memo: bool = Field(True, description="Включить авто-запоминание для админов")
     daily_mention_enabled: bool = Field(True, description="Включить ежедневное упоминание")
     daily_mention_hour: int = Field(12, description="Час для ежедневного упоминания (по TZ)")
+    
+    @property
+    def name_keywords_list(self) -> List[str]:
+        """Возвращает список ключевых слов для обращения к боту."""
+        if isinstance(self.name_keywords, str):
+            return [word.strip().lower() for word in self.name_keywords.split(',') if word.strip()]
+        return self.name_keywords if isinstance(self.name_keywords, list) else []
 
     # --- Тайминги и временные зоны ---
     timezone: str = Field("Europe/Riga", description="Часовой пояс для работы бота")
@@ -56,16 +64,34 @@ class Settings(BaseSettings):
     # --- База данных ---
     db_name: str = Field("bot.db", description="Имя файла базы данных SQLite")
 
+    # --- Environment settings ---
+    environment: str = Field("development", description="Среда выполнения")
+    log_level: str = Field("INFO", description="Уровень логирования")
+    
+    @property
+    def telegram_token(self) -> str:
+        """Алиас для совместимости."""
+        return self.bot_token
+    
+    @property 
+    def is_production(self) -> bool:
+        """Проверка на продакшн среду."""
+        return self.environment.lower() == "production"
+    
+    def validate_required_fields(self):
+        """Проверяет обязательные поля."""
+        if not self.bot_token:
+            raise ValueError("BOT_TOKEN обязателен")
+        if not self.groq_api_key:
+            raise ValueError("GROQ_API_KEY обязателен")
+        return True
+
     model_config = SettingsConfigDict(
         env_file=".env",
         env_file_encoding="utf-8",
         case_sensitive=False,
-        # Позволяет Pydantic автоматически парсить строки в нужные типы
-        # например, "1,2,3" в set({1, 2, 3}) для ADMIN_IDS
-        env_prefix="", # Можно добавить префикс, например 'BOT_'
-        # Для ADMIN_IDS и NAME_KEYWORDS, которые являются списками/множествами из строки
-        # Pydantic v2 не делает это автоматически, это нужно будет сделать при инициализации.
-        # Но для большинства простых типов (str, int, float, bool) все будет работать из коробки.
+        extra='ignore',  # Игнорировать неизвестные переменные окружения
+        env_prefix='',  # Нет префикса для переменных
     )
 
 # Создаем единственный экземпляр настроек, который будет использоваться во всем приложении

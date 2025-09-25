@@ -1,1 +1,1 @@
-web: python -m bot_groq.main
+worker: python -m bot_groq

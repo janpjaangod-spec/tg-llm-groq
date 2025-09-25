@@ -8,7 +8,7 @@ import tempfile
 import os
 
 from bot_groq.config.settings import settings
-from bot_groq.services.database import db_save_message, db_load_person
+from bot_groq.services.database import db_add_chat_message, db_load_person
 from bot_groq.services.llm import llm_vision, llm_text
 from bot_groq.core.profiles import update_person_profile
 
@@ -55,7 +55,7 @@ async def handle_photo(message: Message):
     """Обработчик фотографий."""
     try:
         # Сохраняем сообщение в базу
-        db_save_message(
+        db_add_chat_message(
             chat_id=message.chat.id,
             user_id=message.from_user.id,
             username=message.from_user.username or "",
@@ -83,7 +83,7 @@ async def handle_photo(message: Message):
         
         # Ключевые слова в подписи
         elif message.caption and any(keyword.lower() in message.caption.lower() 
-                                   for keyword in settings.name_keywords):
+                                   for keyword in settings.name_keywords_list):
             should_analyze = True
         
         # Случайный анализ (меньший шанс чем для текста)
@@ -114,7 +114,7 @@ async def handle_photo(message: Message):
                 await message.reply(response)
                 
                 # Сохраняем ответ бота
-                db_save_message(
+                db_add_chat_message(
                     chat_id=message.chat.id,
                     user_id=bot_info.id,
                     username=bot_info.username,
@@ -143,7 +143,7 @@ async def handle_sticker(message: Message):
     """Обработчик стикеров."""
     try:
         # Сохраняем в базу
-        db_save_message(
+        db_add_chat_message(
             chat_id=message.chat.id,
             user_id=message.from_user.id,
             username=message.from_user.username or "",
@@ -196,7 +196,7 @@ async def handle_gif(message: Message):
     """Обработчик GIF-анимаций."""
     try:
         # Сохраняем в базу
-        db_save_message(
+        db_add_chat_message(
             chat_id=message.chat.id,
             user_id=message.from_user.id,
             username=message.from_user.username or "",
@@ -250,7 +250,7 @@ async def handle_video(message: Message):
     """Обработчик видео."""
     try:
         # Сохраняем в базу
-        db_save_message(
+        db_add_chat_message(
             chat_id=message.chat.id,
             user_id=message.from_user.id,
             username=message.from_user.username or "",
@@ -304,7 +304,7 @@ async def handle_voice(message: Message):
     """Обработчик голосовых сообщений."""
     try:
         # Сохраняем в базу
-        db_save_message(
+        db_add_chat_message(
             chat_id=message.chat.id,
             user_id=message.from_user.id,
             username=message.from_user.username or "",
@@ -372,7 +372,7 @@ async def handle_document(message: Message):
         doc_name = message.document.file_name or "unknown"
         doc_size = message.document.file_size or 0
         
-        db_save_message(
+        db_add_chat_message(
             chat_id=message.chat.id,
             user_id=message.from_user.id,
             username=message.from_user.username or "",

@@ -10,7 +10,7 @@ from collections import defaultdict, deque
 from datetime import datetime, timedelta
 import asyncio
 
-from bot_groq.services.database import db_get_message_history, db_get_all_groups
+from bot_groq.services.database import db_get_chat_tail, db_get_all_groups
 from bot_groq.utils.logging import core_logger
 from bot_groq.utils.cache import cache, cached
 
@@ -69,7 +69,7 @@ class AnalyticsEngine:
         """Получает аналитику пользователя."""
         try:
             # Получаем историю сообщений пользователя
-            history = db_get_message_history(chat_id, limit=1000)
+            history = db_get_chat_tail(chat_id, limit=1000)
             user_messages = [msg for msg in history if msg.get('user_id') == user_id]
             
             if not user_messages:
@@ -125,7 +125,7 @@ class AnalyticsEngine:
     def get_chat_analytics(self, chat_id: int) -> Optional[ChatAnalytics]:
         """Получает аналитику чата."""
         try:
-            history = db_get_message_history(chat_id, limit=5000)
+            history = db_get_chat_tail(chat_id, limit=5000)
             
             if not history:
                 return None
@@ -206,7 +206,7 @@ class AnalyticsEngine:
             for group in groups:
                 chat_id = group.get('chat_id')
                 if chat_id:
-                    history = db_get_message_history(chat_id, limit=1000)
+                    history = db_get_chat_tail(chat_id, limit=1000)
                     total_messages += len(history)
                     
                     for msg in history:

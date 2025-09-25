@@ -7,7 +7,7 @@ from typing import List
 
 from bot_groq.config.settings import settings
 from bot_groq.services.database import (
-    db_get_message_history, db_clear_history, db_get_group_stats,
+    db_get_chat_tail, db_clear_history, db_get_group_stats,
     db_load_person, db_save_person, db_get_all_groups
 )
 from bot_groq.core.profiles import get_user_profile_for_display
@@ -143,7 +143,7 @@ async def cmd_clear_history(message: Message):
     
     try:
         # Получаем количество для подтверждения
-        current_count = len(db_get_message_history(message.chat.id, limit=10000))
+        current_count = len(db_get_chat_tail(message.chat.id, limit=10000))
         
         # Очищаем историю
         db_clear_history(message.chat.id)
@@ -168,7 +168,7 @@ async def cmd_export_data(message: Message):
         export_data = {
             "chat_id": message.chat.id,
             "export_time": time.time(),
-            "messages": db_get_message_history(message.chat.id, limit=1000),
+            "messages": db_get_chat_tail(message.chat.id, limit=1000),
             "stats": db_get_group_stats(message.chat.id),
             "dynamics": analyze_group_dynamics(message.chat.id),
             "tensions": get_group_tension_points(message.chat.id)
@@ -331,7 +331,7 @@ async def cmd_debug(message: Message):
             f"",
             f"⚙️ Настройки:",
             f"• Admin IDs: {len(settings.admin_user_ids)}",
-            f"• Name keywords: {len(settings.name_keywords)}",
+            f"• Name keywords: {len(settings.name_keywords_list)}",
             f"• Groq model: {settings.groq_model}",
             f"• Response chance: {settings.response_chance}%"
         ]

@@ -298,3 +298,34 @@ def db_get_user_relationships(chat_id: int, user_id: int, limit: int = 6) -> Lis
                      WHERE chat_id=? AND user_id_a=? ORDER BY ABS(score) DESC LIMIT ?""",
                   (str(chat_id), str(user_id), limit))
         return c.fetchall()
+
+def db_get_group_stats(chat_id: int) -> Dict[str, Any]:
+    """Получает статистику группы."""
+    with closing(get_db_connection()) as conn:
+        c = conn.cursor()
+        
+        # Количество сообщений
+        c.execute("SELECT COUNT(*) FROM chat_history WHERE chat_id=?", (str(chat_id),))
+        message_count = c.fetchone()[0]
+        
+        # Количество уникальных пользователей
+        c.execute("SELECT COUNT(DISTINCT user_id) FROM chat_history WHERE chat_id=? AND user_id IS NOT NULL", (str(chat_id),))
+        user_count = c.fetchone()[0]
+        
+        # Последняя активность
+        c.execute("SELECT MAX(ts) FROM chat_history WHERE chat_id=?", (str(chat_id),))
+        last_activity = c.fetchone()[0]
+        
+        return {
+            "message_count": message_count,
+            "user_count": user_count,
+            "last_activity": last_activity
+        }
+
+def db_get_last_activity(chat_id: int) -> Optional[float]:
+    """Получает время последней активности в чате."""
+    with closing(get_db_connection()) as conn:
+        c = conn.cursor()
+        c.execute("SELECT last_ts FROM chat_activity WHERE chat_id=?", (str(chat_id),))
+        result = c.fetchone()
+        return result[0] if result else None
