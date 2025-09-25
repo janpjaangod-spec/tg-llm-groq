@@ -510,3 +510,30 @@ async def cmd_vars(message: Message):
         await message.reply("Overrides:\n"+"\n".join(lines))
     except Exception as e:
         await message.reply(f"❌ vars error: {e}")
+
+@router.message(Command("unset"))
+async def cmd_unset(message: Message):
+    if not is_admin(message.from_user.id):
+        return
+    try:
+        parts = message.text.split(maxsplit=1)
+        if len(parts) < 2:
+            await message.reply("Использование: /unset ключ")
+            return
+        key = parts[1].strip()
+        db_runtime_delete(key)
+        await message.reply(f"🧹 override удалён: {key}")
+    except Exception as e:
+        await message.reply(f"❌ unset error: {e}")
+
+@router.message(Command("admin_help"))
+async def cmd_admin_help(message: Message):
+    if not is_admin(message.from_user.id):
+        return
+    cmds = [
+        "/reload_settings","/prompt","/prompt full","/prompt set <txt>",
+        "/set k v","/get k","/vars","/unset k",
+        "/who","/stats","/global_stats","/clear_history","/export_data",
+        "/set_mode <mode>","/debug","/forget_user (reply)"
+    ]
+    await message.reply("Админ команды:\n" + "\n".join(cmds))

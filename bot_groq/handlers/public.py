@@ -16,9 +16,19 @@ router = Router()
 async def cmd_settings_view(message: Message):
     """Показывает основные текущие настройки (без чувствительных токенов)."""
     from bot_groq.config import settings
+    # Подтягиваем runtime overrides и актуальную модель из БД
+    try:
+        from bot_groq.services.database import db_get_settings, db_runtime_all
+        cfg = db_get_settings()
+        overrides = db_runtime_all()
+        model_active = cfg.get("model", settings.groq_model)
+    except Exception:
+        cfg = {}
+        overrides = {}
+        model_active = settings.groq_model
     lines = [
         "⚙️ <b>Текущие настройки</b>",
-        f"Модель: {settings.groq_model}",
+        f"Модель: {model_active}",
         f"Vision: {settings.groq_vision_model}",
         f"Ответ шанс: {settings.response_chance}%", 
         f"ShortMode: {'on' if settings.reply_short_mode else 'off'} / max_tokens={settings.reply_max_tokens}",
@@ -26,8 +36,11 @@ async def cmd_settings_view(message: Message):
         f"Spice: {settings.spice_level}",
         f"Timezone: {settings.timezone}",
         f"Env: {settings.environment}",
-        f"Admins: {len(settings.admin_ids)}", 
+        f"Admins: {len(settings.admin_ids)}",
     ]
+    if overrides:
+        preview = ", ".join(f"{k}" for k in sorted(overrides.keys())[:6])
+        lines.append(f"Overrides: {len(overrides)} ({preview}{'...' if len(overrides)>6 else ''})")
     await message.reply("\n".join(lines), parse_mode="HTML")
 
 def _is_admin(user_id: int) -> bool:

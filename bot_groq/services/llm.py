@@ -122,7 +122,14 @@ async def llm_text(
             model = normalized
         messages: List[Dict[str, Any]]
         if isinstance(prompt_or_messages, str):
-            sys_msg = system_prompt or settings.default_system_prompt
+            # Берём актуальный system_prompt из БД/overrides, а не дефолт.
+            try:
+                from bot_groq.services.database import db_get_settings as _dbs
+                current_cfg = _dbs()
+                active_system = current_cfg.get("system_prompt") or settings.default_system_prompt
+            except Exception:
+                active_system = settings.default_system_prompt
+            sys_msg = system_prompt or active_system
             messages = [
                 {"role": "system", "content": sys_msg},
                 {"role": "user", "content": prompt_or_messages}

@@ -156,6 +156,8 @@ async def on_startup(bot: Bot):
             BotCommand(command="set", description="Set var"),
             BotCommand(command="get", description="Get var"),
             BotCommand(command="vars", description="List vars"),
+            BotCommand(command="unset", description="Del var"),
+            BotCommand(command="admin_help", description="Админ справка"),
         ]
         # Сначала удаляем старые списки в более специфичных scope
         for scope in (BotCommandScopeAllPrivateChats(), BotCommandScopeAllGroupChats(), BotCommandScopeAllChatAdministrators()):
