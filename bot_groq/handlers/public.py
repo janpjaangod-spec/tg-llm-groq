@@ -75,37 +75,6 @@ async def cmd_info(message: Message):
     
     await message.reply(random.choice(responses))
 
-@router.message(Command("forget"))
-async def cmd_forget(message: Message):
-    """Позволяет пользователю удалить свой профиль."""
-    try:
-        # Загружаем текущий профиль
-        profile = db_load_person(message.chat.id, message.from_user.id)
-        
-        if not profile:
-            responses = [
-                "Да я тебя и так не помню особо.",
-                "Забыть тебя? Так ты уже никто для меня.",
-                "Какую информацию забыть? У меня про тебя и так пусто."
-            ]
-            await message.reply(random.choice(responses))
-            return
-        
-        # Очищаем профиль (сохраняем пустой)
-        empty_profile = {}
-        db_save_person(message.chat.id, message.from_user.id, empty_profile)
-        
-        responses = [
-            "Готово, стёр тебя из памяти. Теперь мы не знакомы.",
-            "Забыл. Хотя честно говоря, запоминать особо нечего было.",
-            "Информация удалена. Начинаем знакомство с чистого листа.",
-            "Всё стёрто. Теперь ты для меня просто очередной анон."
-        ]
-        
-        await message.reply(random.choice(responses))
-        
-    except Exception as e:
-        await message.reply("Что-то пошло не так при удалении данных.")
 
 @router.message(Command("me"))
 async def cmd_me(message: Message):

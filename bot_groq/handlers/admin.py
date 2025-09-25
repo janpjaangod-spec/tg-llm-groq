@@ -8,12 +8,13 @@ from typing import List
 from bot_groq.config.settings import settings
 from bot_groq.services.database import (
     db_get_chat_tail, db_clear_history, db_get_group_stats,
-    db_load_person, db_save_person, db_get_all_groups
+    db_load_person, db_save_person, db_get_all_groups,
+    db_get_settings, db_set_system_prompt
 )
 from bot_groq.core.profiles import get_user_profile_for_display
 from bot_groq.core.relations import analyze_group_dynamics, get_group_tension_points
 from bot_groq.config import reload_settings as _reload_settings
-from bot_groq.services.database import db_set_model, db_get_settings
+from bot_groq.services.database import db_set_model, db_get_settings as _db_get_settings_for_reload
 
 router = Router()
 
@@ -361,7 +362,7 @@ async def cmd_reload_settings(message: Message):
         new_s = _reload_settings()
         model_note = ""
         try:
-            db_cfg = db_get_settings()
+            db_cfg = _db_get_settings_for_reload()
             if db_cfg.get("model") != new_s.groq_model:
                 db_set_model(new_s.groq_model)
                 model_note = " (обновлена модель в БД)"
@@ -374,3 +375,67 @@ async def cmd_reload_settings(message: Message):
         )
     except Exception as e:
         await message.reply(f"❌ Reload error: {e}")
+
+@router.message(Command("prompt"))
+async def cmd_prompt(message: Message):
+    """Просмотр / изменение системного промпта (админы). Использование:
+    /prompt – показать текущий (усечённый)
+    /prompt full – показать полностью (в личке, чтобы не засорять группу)
+    /prompt set <текст> – установить новый
+    /prompt reset – сбросить к дефолтному
+    """
+    if not is_admin(message.from_user.id):
+        await message.reply("🚫 Только для админов")
+        return
+    try:
+        parts = message.text.split(maxsplit=2)
+        if len(parts) == 1:  # просто /prompt
+            cfg = db_get_settings()
+            sp = cfg.get("system_prompt", "")
+            short = (sp[:400] + "…") if len(sp) > 400 else sp
+            await message.reply(
+                "🧠 <b>System prompt</b> (усечён):\n" + short +
+                "\n\n/set_mode toxic|friendly|neutral|silent\n"+
+                "Использование: /prompt full | /prompt set <текст> | /prompt reset",
+                parse_mode="HTML"
+            )
+            return
+        sub = parts[1].lower()
+        if sub == "full":
+            cfg = db_get_settings()
+            await message.reply("🧠 <b>System prompt (full)</b>:\n" + cfg.get("system_prompt",""), parse_mode="HTML")
+            return
+        if sub == "reset":
+            db_set_system_prompt(settings.default_system_prompt)
+            await message.reply("♻️ System prompt сброшен к дефолтному")
+            return
+        if sub == "set":
+            if len(parts) < 3:
+                await message.reply("⚠️ Укажи текст: /prompt set <текст>")
+                return
+            new_text = parts[2].strip()
+            db_set_system_prompt(new_text)
+            await message.reply(f"✅ System prompt обновлён. Длина: {len(new_text)}")
+            return
+        await message.reply("❓ Неизвестная подкоманда. /prompt | full | set | reset")
+    except Exception as e:
+        await message.reply(f"❌ Ошибка prompt: {e}")
+
+@router.message(Command("forget_user"))
+async def cmd_forget_user(message: Message):
+    """Забыть пользователя (admin). Использовать реплаем на его сообщение."""
+    if not is_admin(message.from_user.id):
+        await message.reply("🚫 Только для админов")
+        return
+    try:
+        if not message.reply_to_message:
+            await message.reply("Ответь этой командой на сообщение пользователя, которого нужно забыть.")
+            return
+        target = message.reply_to_message.from_user
+        if target.is_bot:
+            await message.reply("🤖 Это бот, пропускаю.")
+            return
+        db_save_person(message.chat.id, target.id, {})
+        await message.reply(f"🧼 Память о {target.first_name} очищена.")
+    except Exception as e:
+        await message.reply(f"❌ Ошибка forget_user: {e}")
