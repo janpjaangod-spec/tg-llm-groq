@@ -1,1 +1,1 @@
-worker: python -m bot_groq
+worker: python bot_groq/entrypoint.py
