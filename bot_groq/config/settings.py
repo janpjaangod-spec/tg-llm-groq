@@ -13,6 +13,48 @@ class Settings(BaseSettings):
     admin_token: Optional[str] = Field(None, description="Токен администратора")
     admin_ids: Set[int] = Field(default_factory=set, description="Множество ID администраторов")
 
+    # --- Validators ---
+    @field_validator("admin_ids", mode="before")
+    def _parse_admin_ids(cls, v: object, info: ValidationInfo):  # type: ignore[override]
+        """
+        Принимает разные форматы ADMIN_IDS из env:
+        - пусто / None -> пустое множество
+        - одиночное число ("425807515" или 425807515) -> {425807515}
+        - строка через запятую / пробел / точку с запятой -> разбираем
+        - JSON-подобный список [1,2,3] (если pydantic уже распарсил) -> конвертируем
+        - iterable (list/tuple/set) -> конвертируем
+        """
+        if v is None or v == "" or (isinstance(v, str) and v.strip().lower() in {"none", "null"}):
+            return set()
+
+        # Если уже множество / список чисел
+        if isinstance(v, set):
+            return {int(x) for x in v}
+        if isinstance(v, (list, tuple)):
+            return {int(x) for x in v}
+        # Одиночное число
+        if isinstance(v, int):
+            return {int(v)}
+        # Строка
+        if isinstance(v, str):
+            # Удаляем лишние скобки, если прислали JSON-подобно
+            cleaned = v.strip().strip("[]")
+            if not cleaned:
+                return set()
+            # Унифицируем разделители
+            for sep in [";", " "]:
+                cleaned = cleaned.replace(sep, ",")
+            parts = [p.strip() for p in cleaned.split(",") if p.strip()]
+            ids = set()
+            for p in parts:
+                # Удаляем возможные кавычки
+                p2 = p.strip().strip("'\"")
+                if p2.isdigit():
+                    ids.add(int(p2))
+            return ids
+        # Любой другой тип – возвращаем пустое множество, чтобы не падать
+        return set()
+
     # --- Модели ---
     groq_model: str = Field("llama-3.1-8b-instant", description="Основная модель для генерации текста")
     groq_vision_model: str = Field("meta-llama/llama-4-scout-17b-16e-instruct", description="Модель для анализа изображений")
