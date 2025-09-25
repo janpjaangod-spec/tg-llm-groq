@@ -19,6 +19,28 @@ from bot_groq.services.database import db_set_model, db_get_settings as _db_get_
 
 router = Router()
 
+# === Runtime override helpers ===
+KEY_ALIASES = {
+    "responce_chance": "response_chance",  # частая опечатка
+    "response_change": "response_chance",  # ещё одна вариация
+    "responce_change": "response_chance",
+}
+
+CAST_RULES = {
+    "response_chance": int,
+    "reply_short_mode": lambda v: str(v).lower() in {"1","true","yes","on"},
+    "spice_level": int,
+    "history_turns": int,
+    "groq_model": str,
+    "system_prompt": str,
+}
+
+RANGE_RULES = {
+    "response_chance": (0, 100),
+    "spice_level": (0, 3),
+    "history_turns": (1, 200),
+}
+
 def is_admin(user_id: int) -> bool:
     """Проверяет, является ли пользователь администратором."""
     # Используем поле admin_ids из настроек (множество int)
@@ -473,11 +495,80 @@ async def cmd_set_var(message: Message):
         if len(parts) < 3:
             await message.reply("Использование: /set ключ значение")
             return
-        key, value = parts[1], parts[2]
-        db_runtime_set(key, value)
-        await message.reply(f"✅ override сохранён: {key}={value}")
+        raw_key, value = parts[1], parts[2]
+        key = KEY_ALIASES.get(raw_key, raw_key)
+        # Кастуем если умеем
+        caster = CAST_RULES.get(key)
+        casted = value
+        if caster:
+            try:
+                casted = caster(value)
+            except Exception:
+                await message.reply(f"❌ Неверное значение для {key}: {value}")
+                return
+        # Валидируем диапазон
+        if key in RANGE_RULES:
+            lo, hi = RANGE_RULES[key]
+            try:
+                num = int(casted)
+                if num < lo or num > hi:
+                    await message.reply(f"❌ {key} вне диапазона {lo}..{hi}")
+                    return
+            except Exception:
+                pass
+        # Сохраняем в runtime_settings
+        db_runtime_set(key, str(casted))
+        # Удаляем оригинальную опечатку если была
+        if raw_key != key:
+            try:
+                db_runtime_delete(raw_key)
+            except Exception:
+                pass
+        # Немедленно применяем к объекту settings (горячо)
+        if hasattr(settings, key):
+            try:
+                object.__setattr__(settings, key, casted)
+            except Exception:
+                try:
+                    setattr(settings, key, casted)
+                except Exception:
+                    pass
+        # Особые ключи — синхронизируем с таблицей settings
+        if key == "groq_model":
+            try:
+                from bot_groq.services.database import db_set_model
+                db_set_model(casted)
+            except Exception:
+                pass
+        if key == "system_prompt":
+            try:
+                from bot_groq.services.database import db_set_system_prompt
+                db_set_system_prompt(str(casted))
+            except Exception:
+                pass
+        await message.reply(f"✅ override: {key}={casted}")
     except Exception as e:
         await message.reply(f"❌ set error: {e}")
+
+@router.message(Command("clean_overrides"))
+async def cmd_clean_overrides(message: Message):
+    if not is_admin(message.from_user.id):
+        return
+    try:
+        allv = db_runtime_all()
+        actions = []
+        for bad, good in KEY_ALIASES.items():
+            if bad in allv:
+                val = allv[bad]
+                db_runtime_set(good, val)
+                db_runtime_delete(bad)
+                actions.append(f"{bad}->{good}")
+        if actions:
+            await message.reply("🧹 Исправлены ключи: " + ", ".join(actions))
+        else:
+            await message.reply("✔️ Нет опечаток в overrides")
+    except Exception as e:
+        await message.reply(f"❌ clean_overrides error: {e}")
 
 @router.message(Command("get"))
 async def cmd_get_var(message: Message):
