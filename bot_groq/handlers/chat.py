@@ -63,9 +63,15 @@ def should_respond(message: Message, bot_username: str) -> tuple[bool, str]:
     if random.randint(1, 100) <= settings.response_chance:
         return True, "random_response"
     
-    # AI-bit анализ (более умный анализ контекста)
-    if ai_bit(message.text or ""):
-        return True, "ai_bit_trigger"
+    # AI-bit анализ (более умный анализ контекста). Асинхронно с таймаутом.
+    try:
+        import asyncio
+        bit = asyncio.create_task(ai_bit("roast", context=message.text or ""))
+        result = await asyncio.wait_for(bit, timeout=0.5)
+        if result and isinstance(result, str) and len(result) > 3:
+            return True, "ai_bit_trigger"
+    except Exception:
+        pass
     
     return False, "no_trigger"
 
@@ -91,8 +97,8 @@ async def generate_contextual_response(message: Message, trigger_reason: str) ->
         prompt_parts.append(personal_addon)
     
     # Анализ стиля пользователя
-    user_messages = [msg.get('text', '') for msg in history 
-                    if msg.get('user_id') == message.from_user.id][-5:]
+    user_messages = [msg.get('content', '') for msg in history 
+                     if msg.get('user_id') == str(message.from_user.id)][-5:]
     
     if user_messages:
         style_prompt = get_style_adaptation_prompt(user_messages, "toxic")
