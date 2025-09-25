@@ -1,0 +1,8 @@
+# Супер минимальный набор для Koyeb (если основной не работает)
+aiogram==3.13.0
+groq==0.3.0
+pydantic==2.8.0
+pydantic-settings==2.4.0
+python-dotenv==1.0.1
+aiosqlite==0.20.0
+aiohttp==3.9.5

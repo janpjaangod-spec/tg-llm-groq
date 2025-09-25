@@ -1,5 +1,5 @@
-[build]
-buildpack = "python"
+# Koyeb автоматически определит Python проект и установит зависимости
+# Не нужно указывать buildpack или build команды - они определяются автоматически
 
 [deploy]
 # Основной сервис - Telegram Bot
@@ -10,20 +10,12 @@ instance_type = "nano"
 regions = ["fra"]
 port = 8080
 
-# Environment variables будут установлены через веб-интерфейс Koyeb
+# Environment variables (устанавливаются через веб-интерфейс Koyeb)
 env = [
   "ENVIRONMENT=production",
   "PYTHONPATH=/app",
   "LOG_LEVEL=INFO"
 ]
-
-# Health check для проверки работоспособности
-[deploy.services.health_check]
-grace_period = "30s"
-interval = "30s"
-restart_limit = 5
-timeout = "10s"
-# path = "/health"  # Если будет включен веб-интерфейс
 
 # Автоматическое масштабирование
 [deploy.services.scaling]

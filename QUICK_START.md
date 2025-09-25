@@ -11,7 +11,7 @@
 ```
 Service name: leha-bot
 Instance: Nano (бесплатный)
-Build command: pip install -r requirements.txt
+Build command: (оставить пустым - автоопределение)
 Run command: python -m bot_groq.main
 Port: 8080
 ```
@@ -44,13 +44,15 @@ MAX_CONTEXT_LENGTH=3000
 ## ✅ **ИСПРАВЛЕНО в последнем коммите:**
 - ❌ ~~runtime.txt deprecated~~ → ✅ `.python-version` используется
 - ❌ ~~cryptography==41.0.8 недоступен~~ → ✅ Убрано из обязательных зависимостей
+- ❌ ~~pip: command not found~~ → ✅ Убрана кастомная build команда
 - ❌ ~~Конфликты версий~~ → ✅ Обновлены все пакеты до совместимых версий
 
 ## 🆘 Если что-то не работает
 
-1. **TelegramConflictError** → Остановите старые деплои, подождите 30 сек
-2. **Groq API Error** → Проверьте ключ API на console.groq.com
-3. **Memory Limit** → Добавьте `KOYEB_NANO_MODE=true`
-4. **Build Failed** → Используйте `requirements-koyeb.txt` (минимальные зависимости)
+1. **"pip: command not found"** → НЕ указывайте Build command, оставьте пустым
+2. **TelegramConflictError** → Остановите старые деплои, подождите 30 сек
+3. **Groq API Error** → Проверьте ключ API на console.groq.com
+4. **Memory Limit** → Добавьте `KOYEB_NANO_MODE=true`
+5. **Build Failed** → Временно переименуйте `requirements-minimal.txt` в `requirements.txt`
 
 **Полная документация:** [KOYEB_DEPLOYMENT.md](KOYEB_DEPLOYMENT.md)

@@ -210,7 +210,7 @@ Service name: leha-bot
 Region: Frankfurt (fra)
 Instance: Nano ($0/month с лимитами)
 Port: 8080
-Build command: pip install -r requirements.txt
+Build command: (оставить пустым - Koyeb автоматически определит Python проект)
 Run command: python -m bot_groq.main
 ```
 
@@ -261,6 +261,20 @@ ERROR: Conflict: terminated by other getUpdates request
 # Проверьте переменную GROQ_API_KEY
 # Убедитесь что ключ действителен
 # Проверьте лимиты API
+```
+
+### ❌ **Build ошибки**
+```bash
+# ERROR: failed to build: exit status 127
+# bash: line 1: pip: command not found
+
+# Решение: НЕ указывайте Build command
+# Koyeb автоматически определит Python проект
+# и установит зависимости из requirements.txt
+
+# В настройках Koyeb:
+Build command: (оставить ПУСТЫМ)
+Run command: python -m bot_groq.main
 ```
 
 ### ❌ **Database ошибки**
