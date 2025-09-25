@@ -32,6 +32,10 @@ CAST_RULES = {
     "reply_max_tokens": int,
     "spice_level": int,
     "history_turns": int,
+    "idle_chime_minutes": int,
+    "idle_chime_cooldown": int,
+    "idle_check_every": int,
+    "idle_enabled": lambda v: str(v).lower() in {"1","true","yes","on"},
     "groq_model": str,
     "system_prompt": str,
 }
@@ -41,6 +45,9 @@ RANGE_RULES = {
     "spice_level": (0, 3),
     "history_turns": (1, 200),
     "reply_max_tokens": (32, 4096),
+    "idle_chime_minutes": (5, 24*60),
+    "idle_chime_cooldown": (60, 24*3600),
+    "idle_check_every": (30, 3600),
 }
 
 def _normalize_overrides_dict(raw: dict) -> dict:

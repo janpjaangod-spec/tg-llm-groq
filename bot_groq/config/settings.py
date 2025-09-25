@@ -111,6 +111,7 @@ class Settings(BaseSettings):
     idle_chime_minutes: int = Field(45, description="Через сколько минут тишины бот может написать")
     idle_chime_cooldown: int = Field(600, description="Пауза между 'напоминаниями о себе' (секунды)")
     idle_check_every: int = Field(600, description="Как часто проверять тишину в чатах (секунды)")
+    idle_enabled: bool = Field(True, description="Включить авто-сообщения при длительной тишине")
 
     # --- Контекст и память ---
     history_turns: int = Field(20, description="Количество последних сообщений в контексте")

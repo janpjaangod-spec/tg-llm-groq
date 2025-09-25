@@ -24,6 +24,7 @@ from bot_groq.config import settings
 from bot_groq.services import initialize_database
 from bot_groq.services.database import db_get_settings, db_set_model
 from bot_groq.handlers import routers
+from bot_groq.tasks.idle_chime import idle_chime_worker
 
 # Настройка логирования
 logging.basicConfig(
@@ -94,6 +95,8 @@ async def shutdown_message(bot: Bot):
                 
     except Exception as e:
         logger.error(f"Ошибка при отправке сообщения о завершении: {e}")
+
+_bg_tasks = []  # хранение ссылок на фоновые таски
 
 async def on_startup(bot: Bot):
     """Обработчик запуска бота."""
@@ -177,12 +180,26 @@ async def on_startup(bot: Bot):
     except Exception as e:
         logger.warning(f"⚠️ Не удалось зарегистрировать команды: {e}")
     
+    # Запускаем фоновые задачи
+    try:
+        task = asyncio.create_task(idle_chime_worker(bot))
+        _bg_tasks.append(task)
+        logger.info("▶️ idle_chime_worker started")
+    except Exception as e:
+        logger.warning(f"Не удалось запустить idle_chime_worker: {e}")
+
     logger.info("🎉 Бот успешно запущен и готов к работе!")
 
 async def on_shutdown(bot: Bot):
     """Обработчик завершения работы бота."""
     logger.info("🛑 Завершение работы бота...")
     
+    # Останавливаем фоновые задачи
+    for t in _bg_tasks:
+        try:
+            t.cancel()
+        except Exception:
+            pass
     # Отправляем сообщение о завершении
     await shutdown_message(bot)
     
