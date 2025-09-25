@@ -5,16 +5,12 @@ import random
 import time
 
 from bot_groq.config.settings import settings
-from bot_groq.config.settings import reload_settings
 from bot_groq.services.database import db_load_person, db_save_person, db_get_chat_tail
 from bot_groq.services.llm import llm_text
 from bot_groq.core.profiles import get_user_profile_for_display
 
 router = Router()
 
-def _mask(s: str|None) -> str:
-    if not s: return "—"
-    return s[:4] + "…" + s[-4:] if len(s) > 10 else "***"
 
 @router.message(Command("settings"))
 async def cmd_settings_view(message: Message):
