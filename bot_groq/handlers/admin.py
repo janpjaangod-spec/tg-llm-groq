@@ -552,6 +552,25 @@ async def cmd_model(message: Message):
     from bot_groq.services.llm import _normalize_model
     norm = _normalize_model(new_name)
     from bot_groq.services.database import db_set_model, db_runtime_set
+    from bot_groq.services.database import db_get_settings as _gs
+    prev = _gs().get("model")
     db_set_model(norm)
     db_runtime_set("groq_model", norm)
-    await message.reply(f"✅ Модель обновлена: {new_name} → {norm}")
+    if norm != new_name.strip():
+        await message.reply(f"⚠️ '{new_name}' не распознана → '{norm}' (prev {prev}). /models для списка.")
+    else:
+        await message.reply(f"✅ Модель: {prev} → {norm}")
+
+@router.message(Command("models"))
+async def cmd_models(message: Message):
+    if not is_admin(message.from_user.id):
+        return
+    from bot_groq.services.llm import list_models
+    from bot_groq.services.database import db_get_settings
+    cur = db_get_settings().get("model")
+    models = list_models()
+    lines = ["Доступные модели (известные слоги):"]
+    for m in models:
+        mark = "✅" if m == cur else "•"
+        lines.append(f"{mark} {m}")
+    await message.reply("\n".join(lines))

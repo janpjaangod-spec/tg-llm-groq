@@ -10,36 +10,41 @@ KNOWN_MODELS = {
     "llama-3.1-8b-instant",
     "llama-3.1-70b-versatile",
     "llama-3.1-405b-reasoning",
-    # Llama 3.2 (если доступны)
+    # Llama 3.2 preview
     "llama-3.2-1b-preview",
     "llama-3.2-3b-preview",
     "llama-3.2-11b-text-preview",
     "llama-3.2-90b-text-preview",
-    # Mixtral / Gemma (пример — закомментируйте, если недоступны в аккаунте)
-    # "mixtral-8x7b-instruct",
-    # "gemma-7b-it",
+    # Llama 3.3 (добавлены предположительные слаги — если какие-то отсутствуют у аккаунта, команда /models покажет)
+    "llama-3.3-8b-instant",
+    "llama-3.3-70b-versatile",
+    # Возможные дополнительные (раскомментируйте при появлении доступа)
+    # "llama-3.3-405b-reasoning",
 }
 
 DEFAULT_MODEL = "llama-3.1-8b-instant"
 
 def _normalize_model(name: str | None) -> str:
-    """Проверяет имя модели. Если неизвестно — возвращает дефолт и логирует."""
+    """Сохраняем старое поведение для внутренних вызовов (тихий fallback)."""
     if not name:
         return DEFAULT_MODEL
-    name = name.strip()
-    if name in KNOWN_MODELS:
-        return name
-    # Попытка авто-исправления частых опечаток
-    lower = name.lower()
-    if "12ob" in lower:  # частая опечатка 120b -> 12ob
+    raw = name.strip()
+    if raw in KNOWN_MODELS:
+        return raw
+    lower = raw.lower()
+    if "12ob" in lower:
         candidate = lower.replace("12ob", "120b")
         if candidate in KNOWN_MODELS:
             return candidate
-    # Если явно openai/ или прочий namespace — точно не от Groq
-    if "/" in name and not name.startswith("meta-llama"):
-        # возвращаем дефолт
+    if "/" in raw and not raw.startswith("meta-llama"):
         return DEFAULT_MODEL
     return DEFAULT_MODEL
+
+def is_known_model(name: str) -> bool:
+    return name in KNOWN_MODELS
+
+def list_models() -> list[str]:
+    return sorted(KNOWN_MODELS)
 
 # Глобальная переменная для клиента Groq
 client = None
