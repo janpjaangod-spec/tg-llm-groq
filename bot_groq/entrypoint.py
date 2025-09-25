@@ -42,7 +42,7 @@ def run_worker_only():
     asyncio.run(run_bot())
 
 
-def run_with_http():
+def run_with_http(skip_poll: bool = False):
     if FastAPI is None or uvicorn is None:
         logger.warning("FastAPI/uvicorn not available; falling back to worker-only mode")
         run_worker_only()
@@ -56,11 +56,14 @@ def run_with_http():
 
     bot_task: asyncio.Task | None = None
 
-    @app.on_event("startup")
-    async def _startup():  # noqa
-        nonlocal bot_task
-        logger.info("HTTP server startup: launching bot polling task")
-        bot_task = asyncio.create_task(_bot_wrapper())
+    if not skip_poll:
+        @app.on_event("startup")
+        async def _startup():  # noqa
+            nonlocal bot_task
+            logger.info("HTTP server startup: launching bot polling task")
+            bot_task = asyncio.create_task(_bot_wrapper())
+    else:
+        logger.info("HTTP server startup: SKIP_POLLING=1 => bot polling disabled")
 
     @app.on_event("shutdown")
     async def _shutdown():  # noqa
@@ -77,6 +80,6 @@ def run_with_http():
 
 if __name__ == "__main__":
     if os.getenv("PORT"):
-        run_with_http()
+        run_with_http(skip_poll=bool(os.getenv("SKIP_POLLING")))
     else:
         run_worker_only()
