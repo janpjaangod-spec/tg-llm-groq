@@ -623,11 +623,70 @@ async def cmd_admin_help(message: Message):
         return
     cmds = [
         "/reload_settings","/prompt","/prompt full","/prompt set <txt>",
-        "/set k v","/get k","/vars","/unset k",
+        "/set k v","/get k","/vars","/unset k","/clean_overrides",
+        "/config","/config set k v","/config find mask",
         "/who","/stats","/global_stats","/clear_history","/export_data",
         "/set_mode <mode>","/debug","/forget_user (reply)"
     ]
     await message.reply("Админ команды:\n" + "\n".join(cmds))
+
+@router.message(Command("config"))
+async def cmd_config(message: Message):
+    if not is_admin(message.from_user.id):
+        return
+    try:
+        parts = message.text.split(maxsplit=3)
+        # Подкоманда set
+        if len(parts) >= 3 and parts[1].lower() == "set":
+            # Переправляем в /set (используем внутренний вызов)
+            class FakeMsg:
+                def __init__(self, orig, new_text):
+                    self.__dict__ = orig.__dict__
+                    self.text = new_text
+            new_text = message.text.replace("/config set", "/set", 1)
+            await cmd_set_var(FakeMsg(message, new_text))  # type: ignore
+            return
+        # Подкоманда find
+        mask = None
+        if len(parts) >= 3 and parts[1].lower() == "find":
+            mask = parts[2].lower()
+        from bot_groq.services.database import db_runtime_all
+        overrides = db_runtime_all()
+        data = settings.model_dump()
+        hidden = {"bot_token","groq_api_key","admin_token"}
+        lines = ["⚙️ <b>Конфиг</b> (★ override)"]
+        def fmt_val(k,v):
+            if k == "system_prompt" and isinstance(v,str):
+                short = (v[:160]+"…") if len(v)>160 else v
+                return f"(len={len(v)}) {short}"
+            if isinstance(v,(list,set,tuple)):
+                return f"{type(v).__name__}[{len(v)}]"
+            s = str(v)
+            return (s[:90]+"…") if len(s)>90 else s
+        for k in sorted(data.keys()):
+            if k in hidden: continue
+            if mask and mask not in k.lower():
+                continue
+            star = "★" if k in overrides else "•"
+            lines.append(f"{star} {k} = {fmt_val(k, data[k])}")
+        if not mask:
+            lines.append("\n/config set key value | /config find part | /clean_overrides | /set key value")
+        out = "\n".join(lines)
+        if len(out) <= 3900:
+            await message.reply(out, parse_mode="HTML")
+        else:
+            # Режем на части
+            buf = []
+            ln = 0
+            for l in lines:
+                if ln + len(l) + 1 > 3900 and buf:
+                    await message.reply("\n".join(buf), parse_mode="HTML")
+                    buf=[]; ln=0
+                buf.append(l); ln += len(l)+1
+            if buf:
+                await message.reply("\n".join(buf), parse_mode="HTML")
+    except Exception as e:
+        await message.reply(f"❌ config error: {e}")
 
 @router.message(Command("model"))
 async def cmd_model(message: Message):
