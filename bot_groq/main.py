@@ -10,6 +10,7 @@ import sys
 from aiogram import Bot, Dispatcher
 from aiogram.client.default import DefaultBotProperties
 from aiogram.enums import ParseMode
+from aiogram.types import BotCommand, BotCommandScopeAllChatAdministrators, BotCommandScopeDefault
 
 # Импорты наших модулей
 from bot_groq.config import settings
@@ -108,6 +109,38 @@ async def on_startup(bot: Bot):
     
     # Отправляем стартовое сообщение
     await startup_message(bot)
+
+    # === Регистрация команд в меню ===
+    try:
+        user_commands = [
+            BotCommand(command="help", description="Справка"),
+            BotCommand(command="info", description="О боте"),
+            BotCommand(command="me", description="Мой профиль"),
+            BotCommand(command="forget", description="Забыть меня"),
+            BotCommand(command="mood", description="Настроение бота"),
+            BotCommand(command="ask", description="Задать вопрос по делу"),
+            BotCommand(command="random", description="Случайная фраза"),
+            BotCommand(command="stats", description="Краткая статистика"),
+            BotCommand(command="roast", description="Уничтожь меня"),
+            BotCommand(command="compliment", description="Язвительный комплимент"),
+            BotCommand(command="fortune", description="Мрачное предсказание"),
+            BotCommand(command="bad_advice", description="Вредный совет"),
+        ]
+        admin_extra = [
+            BotCommand(command="who", description="Профиль пользователя"),
+            BotCommand(command="set_mode", description="Режим бота"),
+            BotCommand(command="clear_history", description="Очистить историю"),
+            BotCommand(command="export_data", description="Экспорт данных"),
+            BotCommand(command="global_stats", description="Глобальная статистика"),
+            BotCommand(command="debug", description="Отладка")
+        ]
+        # Пользовательские команды по умолчанию
+        await bot.set_my_commands(user_commands, scope=BotCommandScopeDefault())
+        # Администраторы видят объединённый список
+        await bot.set_my_commands(user_commands + admin_extra, scope=BotCommandScopeAllChatAdministrators())
+        logger.info("✅ Команды бота зарегистрированы")
+    except Exception as e:
+        logger.warning(f"⚠️ Не удалось зарегистрировать команды: {e}")
     
     logger.info("🎉 Бот успешно запущен и готов к работе!")
 

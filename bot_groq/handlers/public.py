@@ -191,9 +191,24 @@ async def cmd_ask(message: Message):
             return
         
         # Генерируем ответ через LLM
-        prompt = f"Пользователь спрашивает: {question}\nОтветь в своем токсичном стиле, но по существу."
-        
-        response = await llm_text(prompt, max_tokens=0)
+        # Определяем «серьёзный» вопрос — меньше сарказма, больше сути
+        serious_markers = ["что такое", "почему", "зачем", "как работает", "объясни", "что делать", "как сделать", "difference", "разница"]
+        lower_q = question.lower()
+        is_serious = any(m in lower_q for m in serious_markers) or len(question.split()) > 8
+
+        if is_serious:
+            system_override = (
+                "Ты токсичный бот, НО пользователь задал серьёзный вопрос. "
+                "Сначала дай чёткий, предельно короткий (1-2 предложения) фактологичный ответ без лишнего мусора. "
+                "Потом, при желании, добавь одну колкую ремарку. Не растягивай текст."
+            )
+            response = await llm_text([
+                {"role": "system", "content": system_override},
+                {"role": "user", "content": question}
+            ], max_tokens=0)
+        else:
+            prompt = f"Пользователь спрашивает: {question}\nОтветь в своем токсичном стиле, но по существу (коротко)."
+            response = await llm_text(prompt, max_tokens=0)
         
         if response:
             await message.reply(response)
