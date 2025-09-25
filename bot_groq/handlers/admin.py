@@ -9,7 +9,8 @@ from bot_groq.config.settings import settings
 from bot_groq.services.database import (
     db_get_chat_tail, db_clear_history, db_get_group_stats,
     db_load_person, db_save_person, db_get_all_groups,
-    db_get_settings, db_set_system_prompt
+    db_get_settings, db_set_system_prompt,
+    db_runtime_set, db_runtime_get, db_runtime_all, db_runtime_delete
 )
 from bot_groq.core.profiles import get_user_profile_for_display
 from bot_groq.core.relations import analyze_group_dynamics, get_group_tension_points
@@ -360,6 +361,15 @@ async def cmd_reload_settings(message: Message):
     try:
         old_model = settings.groq_model
         new_s = _reload_settings()
+        # Применяем runtime overrides поверх env (мгновенно)
+        overrides = db_runtime_all()
+        for k,v in overrides.items():
+            if hasattr(new_s, k):
+                try:
+                    casted = type(getattr(new_s,k))(v) if getattr(new_s,k) is not None else v
+                    object.__setattr__(new_s, k, casted)
+                except Exception:
+                    object.__setattr__(new_s, k, v)
         model_note = ""
         try:
             db_cfg = _db_get_settings_for_reload()
@@ -371,7 +381,7 @@ async def cmd_reload_settings(message: Message):
         await message.reply(
             "🔄 Settings reloaded\n"
             f"Model: {old_model} → {new_s.groq_model}{model_note}\n"
-            f"Chance={new_s.response_chance}% short={'on' if new_s.reply_short_mode else 'off'}"
+            f"Chance={new_s.response_chance}% short={'on' if new_s.reply_short_mode else 'off'} overrides={len(overrides)}"
         )
     except Exception as e:
         await message.reply(f"❌ Reload error: {e}")
@@ -426,6 +436,8 @@ async def cmd_prompt(message: Message):
                 return
             new_text = parts[2].strip()
             db_set_system_prompt(new_text)
+            # runtime override тоже кладём
+            db_runtime_set("system_prompt", new_text)
             await message.reply(f"✅ System prompt обновлён. Длина: {len(new_text)}")
             return
         await message.reply("❓ Неизвестная подкоманда. /prompt | full | set | reset")
@@ -450,3 +462,51 @@ async def cmd_forget_user(message: Message):
         await message.reply(f"🧼 Память о {target.first_name} очищена.")
     except Exception as e:
         await message.reply(f"❌ Ошибка forget_user: {e}")
+
+@router.message(Command("set"))
+async def cmd_set_var(message: Message):
+    """/set KEY VALUE — runtime override (админ). Сохраняется в БД и применяется при reload автоматически."""
+    if not is_admin(message.from_user.id):
+        return
+    try:
+        parts = message.text.split(maxsplit=2)
+        if len(parts) < 3:
+            await message.reply("Использование: /set ключ значение")
+            return
+        key, value = parts[1], parts[2]
+        db_runtime_set(key, value)
+        await message.reply(f"✅ override сохранён: {key}={value}")
+    except Exception as e:
+        await message.reply(f"❌ set error: {e}")
+
+@router.message(Command("get"))
+async def cmd_get_var(message: Message):
+    if not is_admin(message.from_user.id):
+        return
+    try:
+        parts = message.text.split(maxsplit=1)
+        if len(parts) < 2:
+            await message.reply("Использование: /get ключ")
+            return
+        key = parts[1]
+        val = db_runtime_get(key)
+        if val is None:
+            await message.reply("(нет override)" )
+        else:
+            await message.reply(f"{key}={val}")
+    except Exception as e:
+        await message.reply(f"❌ get error: {e}")
+
+@router.message(Command("vars"))
+async def cmd_vars(message: Message):
+    if not is_admin(message.from_user.id):
+        return
+    try:
+        allv = db_runtime_all()
+        if not allv:
+            await message.reply("Нет runtime overrides")
+            return
+        lines = [f"{k}={v}" for k,v in sorted(allv.items())]
+        await message.reply("Overrides:\n"+"\n".join(lines))
+    except Exception as e:
+        await message.reply(f"❌ vars error: {e}")

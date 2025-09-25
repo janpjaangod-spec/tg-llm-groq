@@ -43,6 +43,10 @@ def initialize_database():
             id INTEGER PRIMARY KEY CHECK (id=1),
             system_prompt TEXT NOT NULL,
             model TEXT NOT NULL)""")
+        c.execute("""CREATE TABLE IF NOT EXISTS runtime_settings(
+            key TEXT PRIMARY KEY,
+            value TEXT NOT NULL,
+            updated_ts REAL NOT NULL)""")
         c.execute("""CREATE TABLE IF NOT EXISTS history(
             user_id TEXT NOT NULL, role TEXT NOT NULL, content TEXT NOT NULL, ts REAL NOT NULL)""")
         c.execute("""CREATE TABLE IF NOT EXISTS chat_history(
@@ -100,7 +104,14 @@ def db_get_settings() -> Dict[str, Any]:
         c = conn.cursor()
         c.execute("SELECT system_prompt, model FROM settings WHERE id=1")
         row = c.fetchone()
-    return {"system_prompt": row[0], "model": row[1]}
+    base = {"system_prompt": row[0], "model": row[1]}
+    # Подмешиваем runtime overrides (если есть)
+    with closing(get_db_connection()) as conn:
+        c = conn.cursor()
+        c.execute("SELECT key,value FROM runtime_settings")
+        for k,v in c.fetchall():
+            base[k] = v
+    return base
 
 def db_set_system_prompt(text: str):
     with closing(get_db_connection()) as conn:
@@ -116,6 +127,32 @@ def db_set_model(model: str):
         norm = model
     with closing(get_db_connection()) as conn:
         conn.execute("UPDATE settings SET model=? WHERE id=1", (norm,))
+        conn.commit()
+
+# ========= Runtime overrides =========
+def db_runtime_set(key: str, value: str):
+    with closing(get_db_connection()) as conn:
+        conn.execute("""INSERT INTO runtime_settings(key,value,updated_ts) VALUES(?,?,?)
+                      ON CONFLICT(key) DO UPDATE SET value=excluded.value,updated_ts=excluded.updated_ts""",
+                     (key, value, time.time()))
+        conn.commit()
+
+def db_runtime_get(key: str) -> Optional[str]:
+    with closing(get_db_connection()) as conn:
+        c = conn.cursor()
+        c.execute("SELECT value FROM runtime_settings WHERE key=?", (key,))
+        row = c.fetchone()
+        return row[0] if row else None
+
+def db_runtime_all() -> Dict[str,str]:
+    with closing(get_db_connection()) as conn:
+        c = conn.cursor()
+        c.execute("SELECT key,value FROM runtime_settings")
+        return {k:v for k,v in c.fetchall()}
+
+def db_runtime_delete(key: str):
+    with closing(get_db_connection()) as conn:
+        conn.execute("DELETE FROM runtime_settings WHERE key=?", (key,))
         conn.commit()
 
 # ========= History =========
