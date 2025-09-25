@@ -63,7 +63,7 @@ async def startup_message(bot: Bot):
         )
         
         # Отправляем админам
-        for admin_id in settings.admin_user_ids:
+        for admin_id in settings.admin_ids:
             try:
                 await bot.send_message(admin_id, startup_text)
             except Exception as e:
@@ -77,7 +77,7 @@ async def shutdown_message(bot: Bot):
     try:
         shutdown_text = "🛑 Бот завершает работу..."
         
-        for admin_id in settings.admin_user_ids:
+        for admin_id in settings.admin_ids:
             try:
                 await bot.send_message(admin_id, shutdown_text)
             except Exception as e:
@@ -135,9 +135,8 @@ async def main():
         logger.error("❌ Не задан GROQ_API_KEY!")
         sys.exit(1)
     
-    if not settings.admin_user_ids:
-        logger.error("❌ Не заданы ADMIN_USER_IDS!")
-        sys.exit(1)
+    if not settings.admin_ids:
+        logger.warning("⚠️ Не заданы ADMIN_IDS! Админские функции будут недоступны.")
     
     # Создаем бот и диспетчер
     bot = create_bot()

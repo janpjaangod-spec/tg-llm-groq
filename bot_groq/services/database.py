@@ -329,3 +329,17 @@ def db_get_last_activity(chat_id: int) -> Optional[float]:
         c.execute("SELECT last_ts FROM chat_activity WHERE chat_id=?", (str(chat_id),))
         result = c.fetchone()
         return result[0] if result else None
+
+def db_clear_history(chat_id: int):
+    """Очищает историю сообщений для чата."""
+    with closing(get_db_connection()) as conn:
+        c = conn.cursor()
+        c.execute("DELETE FROM chat_history WHERE chat_id=?", (str(chat_id),))
+        conn.commit()
+
+def db_get_all_groups() -> List[Tuple]:
+    """Получает список всех групп/чатов."""
+    with closing(get_db_connection()) as conn:
+        c = conn.cursor()
+        c.execute("SELECT DISTINCT chat_id FROM chat_history")
+        return c.fetchall()
