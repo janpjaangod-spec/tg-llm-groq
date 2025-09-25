@@ -52,7 +52,7 @@ ADMIN_IDS=123456789  # Ваш Telegram ID
 ### 4. Запуск бота
 
 ```bash
-python bot_groq.py
+python -m bot_groq
 ```
 
 При первом запуске создастся база данных `bot.db` с начальными настройками.
@@ -123,7 +123,7 @@ COPY . .
 RUN useradd -m botuser && chown -R botuser:botuser /app
 USER botuser
 
-CMD ["python", "bot_groq.py"]
+CMD ["python", "-m", "bot_groq"]
 EOF
 
 # Сборка и запуск
@@ -170,7 +170,7 @@ Type=simple
 User=toxik
 WorkingDirectory=/opt/toxik-bot
 Environment=PATH=/opt/toxik-bot/venv/bin
-ExecStart=/opt/toxik-bot/venv/bin/python bot_groq.py
+ExecStart=/opt/toxik-bot/venv/bin/python -m bot_groq
 Restart=always
 RestartSec=10
 

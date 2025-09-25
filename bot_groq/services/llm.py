@@ -1,6 +1,6 @@
 import re
 from groq import Groq
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Union, Optional
 
 from bot_groq.config.settings import settings
 
@@ -45,19 +45,40 @@ def post_filter(text: str) -> str:
     cleaned = re.sub(r"\n{3,}", "\n\n", cleaned).strip()
     return cleaned or "По делу."
 
-def llm_text(messages: List[Dict[str, Any]], model: str) -> str:
-    """
-    Отправляет текстовый запрос к LLM и возвращает отфильтрованный ответ.
+async def llm_text(
+    prompt_or_messages: Union[str, List[Dict[str, Any]]],
+    max_tokens: int = 512,
+    temperature: float = 0.7,
+    model: Optional[str] = None,
+    system_prompt: Optional[str] = None,
+) -> str:
+    """Универсальная функция текстового запроса.
+    Совместимость:
+      - Старый стиль: await llm_text("промпт", max_tokens=100)
+      - Новый стиль: await llm_text([{"role":"system","content":...},{"role":"user","content":...}])
     """
     try:
+        if model is None:
+            from bot_groq.services.database import db_get_settings
+            s = db_get_settings()
+            model = s["model"]
+        messages: List[Dict[str, Any]]
+        if isinstance(prompt_or_messages, str):
+            sys_msg = system_prompt or settings.default_system_prompt
+            messages = [
+                {"role": "system", "content": sys_msg},
+                {"role": "user", "content": prompt_or_messages}
+            ]
+        else:
+            messages = prompt_or_messages
         resp = get_groq_client().chat.completions.create(
-            model=model, 
-            messages=messages, 
-            temperature=0.7,
-            max_tokens=2048
+            model=model,
+            messages=messages,
+            temperature=temperature,
+            max_tokens=max_tokens
         )
-        out = resp.choices[0].message.content.strip()
-        return post_filter(clean_reply(out))
+        out = (resp.choices[0].message.content or "").strip()
+        return post_filter(clean_reply(out)) or "Пусто"
     except Exception as e:
         return f"Ошибка LLM: {e}"
 

@@ -155,11 +155,11 @@ async def test_profile_update():
 ```bash
 # Форматирование кода
 pip install black
-black bot_groq.py
+black bot_groq
 
 # Проверка стиля
 pip install flake8
-flake8 bot_groq.py --max-line-length=120
+flake8 bot_groq --max-line-length=120
 ```
 
 ### Типизация

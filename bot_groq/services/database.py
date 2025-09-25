@@ -22,7 +22,7 @@ def initialize_database():
             user_id TEXT NOT NULL, role TEXT NOT NULL, content TEXT NOT NULL, ts REAL NOT NULL)""")
         c.execute("""CREATE TABLE IF NOT EXISTS chat_history(
             chat_id TEXT NOT NULL, role TEXT NOT NULL, content TEXT NOT NULL,
-            ts REAL NOT NULL, user_id TEXT)""")
+            ts REAL NOT NULL, user_id TEXT, username TEXT)""")
         c.execute("""CREATE TABLE IF NOT EXISTS chat_activity(
             chat_id TEXT PRIMARY KEY, last_ts REAL NOT NULL)""")
         c.execute("""CREATE TABLE IF NOT EXISTS user_memory(
@@ -58,6 +58,15 @@ def initialize_database():
         if c.fetchone()[0] == 0:
             c.execute("INSERT INTO settings (id, system_prompt, model) VALUES (1, ?, ?)",
                       (settings.default_system_prompt, settings.groq_model))
+        # --- Миграции ---
+        # Добавляем колонку username в chat_history если отсутствует
+        c.execute("PRAGMA table_info(chat_history)")
+        cols = [row[1] for row in c.fetchall()]
+        if "username" not in cols:
+            try:
+                c.execute("ALTER TABLE chat_history ADD COLUMN username TEXT")
+            except Exception:
+                pass
         conn.commit()
 
 # ========= Settings =========
@@ -94,15 +103,15 @@ def db_get_history(user_id: str) -> List[Dict[str, str]]:
         rows = c.fetchall()
     return [{"role": r, "content": t} for (r, t) in rows]
 
-def db_add_chat_message(chat_id: int, role: str, content: str, user_id: Optional[str] = None):
+def db_add_chat_message(chat_id: int, role: str, content: str, user_id: Optional[str] = None, username: Optional[str] = None):
     """Базовая внутренняя функция добавления сообщения в историю чата.
     Используйте log_chat_event для гибкой записи из хендлеров.
     """
     now = time.time()
     with closing(get_db_connection()) as conn:
         c = conn.cursor()
-        c.execute("INSERT INTO chat_history (chat_id, role, content, ts, user_id) VALUES (?,?,?,?,?)",
-                  (str(chat_id), role, content, now, str(user_id) if user_id else None))
+    c.execute("INSERT INTO chat_history (chat_id, role, content, ts, user_id, username) VALUES (?,?,?,?,?,?)",
+          (str(chat_id), role, content, now, str(user_id) if user_id else None, username))
         c.execute("""DELETE FROM chat_history WHERE chat_id=? AND rowid NOT IN
                      (SELECT rowid FROM chat_history WHERE chat_id=? ORDER BY ts DESC LIMIT 200)""",
                   (str(chat_id), str(chat_id)))
@@ -122,7 +131,7 @@ def log_chat_event(*, chat_id: int, user_id: Optional[int] = None, username: Opt
         # Простая эвристика: бот -> assistant, остальное -> user
         role = "assistant" if is_bot else "user"
     content = text or ""
-    db_add_chat_message(chat_id=chat_id, role=role, content=content, user_id=str(user_id) if user_id else None)
+    db_add_chat_message(chat_id=chat_id, role=role, content=content, user_id=str(user_id) if user_id else None, username=username)
 
 def db_get_chat_tail(chat_id: int, limit: int) -> List[Dict[str, str]]:
     """Возвращает последние сообщения чата.
