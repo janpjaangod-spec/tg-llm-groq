@@ -41,6 +41,53 @@ RANGE_RULES = {
     "history_turns": (1, 200),
 }
 
+def _normalize_overrides_dict(raw: dict) -> dict:
+    """Возвращает новый dict с нормализованными ключами и удалением дублей."""
+    norm = {}
+    for k,v in raw.items():
+        ck = KEY_ALIASES.get(k, k)
+        # Последняя запись побеждает (обычно canonical заменит опечатку)
+        norm[ck] = v
+    return norm
+
+def _apply_overrides_to_settings(overrides: dict):
+    """Применяет нормализованные overrides к объекту settings (горячо)."""
+    for k,v in overrides.items():
+        if not hasattr(settings, k):
+            continue
+        caster = CAST_RULES.get(k, str)
+        try:
+            casted = caster(v)
+        except Exception:
+            casted = v
+        # Диапазон
+        if k in RANGE_RULES:
+            lo,hi = RANGE_RULES[k]
+            try:
+                num = int(casted)
+                if num < lo or num > hi:
+                    continue
+            except Exception:
+                pass
+        try:
+            object.__setattr__(settings, k, casted)
+        except Exception:
+            try:
+                setattr(settings, k, casted)
+            except Exception:
+                pass
+
+def _sync_alias_rows():
+    """Переносит опечаточные ключи в canonical и удаляет старые."""
+    changed = []
+    allv = db_runtime_all()
+    for bad, good in KEY_ALIASES.items():
+        if bad in allv:
+            db_runtime_set(good, allv[bad])
+            db_runtime_delete(bad)
+            changed.append(f"{bad}->{good}")
+    return changed
+
 def is_admin(user_id: int) -> bool:
     """Проверяет, является ли пользователь администратором."""
     # Используем поле admin_ids из настроек (множество int)
@@ -593,12 +640,16 @@ async def cmd_vars(message: Message):
     if not is_admin(message.from_user.id):
         return
     try:
-        allv = db_runtime_all()
-        if not allv:
+        raw = db_runtime_all()
+        if not raw:
             await message.reply("Нет runtime overrides")
             return
-        lines = [f"{k}={v}" for k,v in sorted(allv.items())]
-        await message.reply("Overrides:\n"+"\n".join(lines))
+        # Нормализуем и показываем только canonical
+        norm = _normalize_overrides_dict(raw)
+        # Покажем если были опечатки
+        removed = [k for k in raw.keys() if k not in norm.keys()]
+        lines = [f"{k}={norm[k]}" for k in sorted(norm.keys())]
+        await message.reply("Overrides (canonical):\n"+"\n".join(lines))
     except Exception as e:
         await message.reply(f"❌ vars error: {e}")
 
@@ -638,27 +689,60 @@ async def cmd_config(message: Message):
         parts = message.text.split(maxsplit=3)
         # Подкоманда set
         if len(parts) >= 3 and parts[1].lower() == "set":
-            # Переправляем в /set (используем внутренний вызов)
-            class FakeMsg:
-                def __init__(self, orig, new_text):
-                    self.__dict__ = orig.__dict__
-                    self.text = new_text
-            new_text = message.text.replace("/config set", "/set", 1)
-            await cmd_set_var(FakeMsg(message, new_text))  # type: ignore
+            # Прямо реализуем установку тут, без FakeMsg
+            if len(parts) < 4:
+                await message.reply("Использование: /config set key value")
+                return
+            raw_key, value = parts[2], parts[3]
+            key = KEY_ALIASES.get(raw_key, raw_key)
+            caster = CAST_RULES.get(key)
+            casted = value
+            if caster:
+                try:
+                    casted = caster(value)
+                except Exception:
+                    await message.reply(f"❌ Неверное значение для {key}: {value}")
+                    return
+            if key in RANGE_RULES:
+                lo,hi = RANGE_RULES[key]
+                try:
+                    num = int(casted)
+                    if num < lo or num > hi:
+                        await message.reply(f"❌ {key} вне диапазона {lo}..{hi}")
+                        return
+                except Exception:
+                    pass
+            db_runtime_set(key, str(casted))
+            if raw_key != key:
+                try: db_runtime_delete(raw_key)
+                except Exception: pass
+            if hasattr(settings, key):
+                try: object.__setattr__(settings, key, casted)
+                except Exception: pass
+            if key == "groq_model":
+                try: db_set_model(str(casted))
+                except Exception: pass
+            if key == "system_prompt":
+                try: db_set_system_prompt(str(casted))
+                except Exception: pass
+            await message.reply(f"✅ {key}={casted}")
             return
         # Подкоманда find
         mask = None
         if len(parts) >= 3 and parts[1].lower() == "find":
             mask = parts[2].lower()
-        from bot_groq.services.database import db_runtime_all
-        overrides = db_runtime_all()
+        from bot_groq.services.database import db_runtime_all, db_get_settings
+        overrides_raw = db_runtime_all()
+        overrides = _normalize_overrides_dict(overrides_raw)
+        # Применяем (на случай ручного редактирования в БД)
+        _apply_overrides_to_settings(overrides)
         data = settings.model_dump()
         hidden = {"bot_token","groq_api_key","admin_token"}
         lines = ["⚙️ <b>Конфиг</b> (★ override)"]
         def fmt_val(k,v):
             if k == "system_prompt" and isinstance(v,str):
                 short = (v[:160]+"…") if len(v)>160 else v
-                return f"(len={len(v)}) {short}"
+                return f"(len={len(v)}) {short} ( /prompt full )"
             if isinstance(v,(list,set,tuple)):
                 return f"{type(v).__name__}[{len(v)}]"
             s = str(v)
@@ -711,6 +795,20 @@ async def cmd_model(message: Message):
         await message.reply(f"⚠️ '{new_name}' не распознана → '{norm}' (prev {prev}). /models для списка.")
     else:
         await message.reply(f"✅ Модель: {prev} → {norm}")
+
+@router.message(Command("sync_overrides"))
+async def cmd_sync_overrides(message: Message):
+    if not is_admin(message.from_user.id):
+        return
+    try:
+        moved = _sync_alias_rows()
+        raw = db_runtime_all()
+        norm = _normalize_overrides_dict(raw)
+        _apply_overrides_to_settings(norm)
+        note = f"Перенесены: {', '.join(moved)}" if moved else "Опечаток не найдено"
+        await message.reply(f"🔄 Overrides синхронизированы. {note}. Всего={len(norm)}")
+    except Exception as e:
+        await message.reply(f"❌ sync_overrides error: {e}")
 
 @router.message(Command("models"))
 async def cmd_models(message: Message):
