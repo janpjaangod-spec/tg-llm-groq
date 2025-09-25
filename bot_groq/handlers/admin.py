@@ -29,6 +29,7 @@ KEY_ALIASES = {
 CAST_RULES = {
     "response_chance": int,
     "reply_short_mode": lambda v: str(v).lower() in {"1","true","yes","on"},
+    "reply_max_tokens": int,
     "spice_level": int,
     "history_turns": int,
     "groq_model": str,
@@ -39,6 +40,7 @@ RANGE_RULES = {
     "response_chance": (0, 100),
     "spice_level": (0, 3),
     "history_turns": (1, 200),
+    "reply_max_tokens": (32, 4096),
 }
 
 def _normalize_overrides_dict(raw: dict) -> dict:

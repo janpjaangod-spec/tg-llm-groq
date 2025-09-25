@@ -163,7 +163,16 @@ async def llm_text(
         # Если max_tokens не задан (0) – берем из настроек
         if not max_tokens:
             from bot_groq.config.settings import settings as _s
-            max_tokens = min(1024, max(32, _s.reply_max_tokens))
+            try:
+                base_tokens = int(getattr(_s, 'reply_max_tokens', 180))
+            except Exception:
+                base_tokens = 180
+            max_tokens = int(min(1024, max(32, base_tokens)))
+        else:
+            try:
+                max_tokens = int(max_tokens)
+            except Exception:
+                max_tokens = 180
 
         # Гарантируем язык ответа (если модель решила отвечать на английском)
         # Добавляем инструкцию в последний user message, если нет русских букв
