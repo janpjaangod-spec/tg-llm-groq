@@ -128,7 +128,11 @@ async def main():
     
     # Проверяем критически важные настройки
     if not settings.telegram_token:
-        logger.error("❌ Не задан TELEGRAM_TOKEN!")
+        import os
+        checked = {k: os.getenv(k) for k in ["BOT_TOKEN", "TELEGRAM_BOT_TOKEN", "TELEGRAM_TOKEN"]}
+        masked = {k: (v[:6] + "..." + v[-4:] if v and len(v) > 12 else v) for k, v in checked.items()}
+        logger.error("❌ Не найден токен бота. Ожидались переменные: BOT_TOKEN / TELEGRAM_BOT_TOKEN / TELEGRAM_TOKEN")
+        logger.error(f"🔎 Текущее состояние переменных: {masked}")
         sys.exit(1)
     
     if not settings.groq_api_key:

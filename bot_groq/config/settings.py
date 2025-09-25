@@ -14,6 +14,21 @@ class Settings(BaseSettings):
     admin_ids: Set[int] = Field(default_factory=set, description="Множество ID администраторов")
 
     # --- Validators ---
+    @field_validator("bot_token", mode="before")
+    def _load_bot_token(cls, v: object, info: ValidationInfo):  # type: ignore[override]
+        """Позволяет задавать токен через любую из переменных:
+        BOT_TOKEN, TELEGRAM_BOT_TOKEN, TELEGRAM_TOKEN.
+        Если поле уже передано напрямую (v), просто возвращаем его.
+        """
+        if v and isinstance(v, str) and v.strip():
+            return v.strip()
+        import os
+        for key in ("BOT_TOKEN", "TELEGRAM_BOT_TOKEN", "TELEGRAM_TOKEN"):
+            val = os.getenv(key)
+            if val and val.strip():
+                return val.strip()
+        return v
+
     @field_validator("admin_ids", mode="before")
     def _parse_admin_ids(cls, v: object, info: ValidationInfo):  # type: ignore[override]
         """
