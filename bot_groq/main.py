@@ -159,6 +159,8 @@ async def on_startup(bot: Bot):
             with suppress(Exception):
                 await bot.delete_my_commands(scope=scope)
         # Записываем новые
+        # В приватных чатах админы тоже увидят расширенный список, но Telegram не умеет фильтровать по user_id в scope.
+        # Поэтому логика: если чат приватный – показываем user_commands (как базу), а admin свои увидят в меню administrators.
         await bot.set_my_commands(user_commands, scope=BotCommandScopeAllPrivateChats())
         await bot.set_my_commands(user_commands, scope=BotCommandScopeAllGroupChats())
         await bot.set_my_commands(admin_commands, scope=BotCommandScopeAllChatAdministrators())

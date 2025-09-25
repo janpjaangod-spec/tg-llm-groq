@@ -390,20 +390,31 @@ async def cmd_prompt(message: Message):
     try:
         parts = message.text.split(maxsplit=2)
         if len(parts) == 1:  # просто /prompt
+            from html import escape
             cfg = db_get_settings()
             sp = cfg.get("system_prompt", "")
-            short = (sp[:400] + "…") if len(sp) > 400 else sp
-            await message.reply(
+            short_raw = (sp[:400] + "…") if len(sp) > 400 else sp
+            short = escape(short_raw)
+            text = (
                 "🧠 <b>System prompt</b> (усечён):\n" + short +
                 "\n\n/set_mode toxic|friendly|neutral|silent\n"+
-                "Использование: /prompt full | /prompt set <текст> | /prompt reset",
-                parse_mode="HTML"
+                "Использование: /prompt full | /prompt set <текст> | /prompt reset"
             )
+            try:
+                await message.reply(text, parse_mode="HTML")
+            except Exception:
+                # Fallback без HTML
+                await message.reply("System prompt (усечён):\n" + short_raw)
             return
         sub = parts[1].lower()
         if sub == "full":
+            from html import escape
             cfg = db_get_settings()
-            await message.reply("🧠 <b>System prompt (full)</b>:\n" + cfg.get("system_prompt",""), parse_mode="HTML")
+            full = escape(cfg.get("system_prompt",""))
+            try:
+                await message.reply("🧠 <b>System prompt (full)</b>:\n" + full, parse_mode="HTML")
+            except Exception:
+                await message.reply("System prompt (full):\n" + cfg.get("system_prompt",""))
             return
         if sub == "reset":
             db_set_system_prompt(settings.default_system_prompt)

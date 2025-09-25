@@ -4,6 +4,43 @@ from typing import List, Dict, Any, Union, Optional
 
 from bot_groq.config.settings import settings
 
+# Список известных (разрешённых) моделей Groq. Можно расширять.
+KNOWN_MODELS = {
+    # Llama 3.1
+    "llama-3.1-8b-instant",
+    "llama-3.1-70b-versatile",
+    "llama-3.1-405b-reasoning",
+    # Llama 3.2 (если доступны)
+    "llama-3.2-1b-preview",
+    "llama-3.2-3b-preview",
+    "llama-3.2-11b-text-preview",
+    "llama-3.2-90b-text-preview",
+    # Mixtral / Gemma (пример — закомментируйте, если недоступны в аккаунте)
+    # "mixtral-8x7b-instruct",
+    # "gemma-7b-it",
+}
+
+DEFAULT_MODEL = "llama-3.1-8b-instant"
+
+def _normalize_model(name: str | None) -> str:
+    """Проверяет имя модели. Если неизвестно — возвращает дефолт и логирует."""
+    if not name:
+        return DEFAULT_MODEL
+    name = name.strip()
+    if name in KNOWN_MODELS:
+        return name
+    # Попытка авто-исправления частых опечаток
+    lower = name.lower()
+    if "12ob" in lower:  # частая опечатка 120b -> 12ob
+        candidate = lower.replace("12ob", "120b")
+        if candidate in KNOWN_MODELS:
+            return candidate
+    # Если явно openai/ или прочий namespace — точно не от Groq
+    if "/" in name and not name.startswith("meta-llama"):
+        # возвращаем дефолт
+        return DEFAULT_MODEL
+    return DEFAULT_MODEL
+
 # Глобальная переменная для клиента Groq
 client = None
 
@@ -43,6 +80,19 @@ def post_filter(text: str) -> str:
     """Фильтрует ответ от LLM, удаляя нежелательные паттерны."""
     cleaned = _bad_re.sub("", text)
     cleaned = re.sub(r"\n{3,}", "\n\n", cleaned).strip()
+    # Удаляем стандартные безопасные дисклеймеры, чтобы стиль оставался язвительным
+    disclaimer_patterns = [
+        r"^(i'?m\s+sorr(y|ie)\b.*)",
+        r"^sorry[,!]?\b.*",
+        r"^i\s+cannot\s+comply.*",
+        r"^i\s+can'?t\s+.*",
+        r"^i\s+am\s+unable.*",
+        r"^as an? (ai|large language|language) model[^\n]*",
+        r"^i do not have (the )?ability.*",
+        r"^i (will|must) not (provide|comply).*",
+    ]
+    for pat in disclaimer_patterns:
+        cleaned = re.sub(pat, "", cleaned, flags=re.IGNORECASE).strip()
     return cleaned or "По делу."
 
 async def llm_text(
@@ -62,6 +112,14 @@ async def llm_text(
             from bot_groq.services.database import db_get_settings
             s = db_get_settings()
             model = s["model"]
+        normalized = _normalize_model(model)
+        if normalized != model:
+            # Логируем один раз через print (минимум зависимостей)
+            try:
+                print(f"[llm] WARN: модель '{model}' не распознана, использую '{normalized}'")
+            except Exception:
+                pass
+            model = normalized
         messages: List[Dict[str, Any]]
         if isinstance(prompt_or_messages, str):
             sys_msg = system_prompt or settings.default_system_prompt
@@ -75,6 +133,12 @@ async def llm_text(
         if not max_tokens:
             from bot_groq.config.settings import settings as _s
             max_tokens = min(1024, max(32, _s.reply_max_tokens))
+
+        # Гарантируем язык ответа (если модель решила отвечать на английском)
+        # Добавляем инструкцию в последний user message, если нет русских букв
+        if all((not re.search(r"[а-яА-Я]", m.get("content","")) for m in messages if isinstance(m.get("content"), str))):
+            # добавим системную подсказку на русский
+            messages.insert(0, {"role": "system", "content": "Отвечай всегда на русском языке."})
 
         resp = get_groq_client().chat.completions.create(
             model=model,
@@ -141,6 +205,13 @@ async def ai_bit(mode: str, context: str = "", style_addon: str = "", system_pro
         model = s["model"]
         if not system_prompt:
             system_prompt = s["system_prompt"]
+    model_norm = _normalize_model(model)
+    if model_norm != model:
+        try:
+            print(f"[ai_bit] WARN: модель '{model}' не распознана, использую '{model_norm}'")
+        except Exception:
+            pass
+        model = model_norm
     
     system = system_prompt + ("\n" + style_addon if style_addon else "")
     
@@ -159,9 +230,9 @@ async def ai_bit(mode: str, context: str = "", style_addon: str = "", system_pro
     else:
         return "Неизвестный режим AI."
     
-    response = llm_text([
+    response = await llm_text([
         {"role": "system", "content": system},
         {"role": "user", "content": user_prompt}
-    ], model)
+    ], model=model)
     
     return prefix + response

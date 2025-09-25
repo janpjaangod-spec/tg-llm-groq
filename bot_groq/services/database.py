@@ -108,8 +108,14 @@ def db_set_system_prompt(text: str):
         conn.commit()
 
 def db_set_model(model: str):
+    # Нормализуем перед сохранением (отфильтруем несуществующие / namespace чужих провайдеров)
+    try:
+        from bot_groq.services.llm import _normalize_model
+        norm = _normalize_model(model)
+    except Exception:
+        norm = model
     with closing(get_db_connection()) as conn:
-        conn.execute("UPDATE settings SET model=? WHERE id=1", (model,))
+        conn.execute("UPDATE settings SET model=? WHERE id=1", (norm,))
         conn.commit()
 
 # ========= History =========
