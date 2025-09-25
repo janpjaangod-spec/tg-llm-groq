@@ -7,7 +7,16 @@ from aiogram.filters import Command, CommandStart
 from aiogram.enums import ParseMode
 from aiogram.client.default import DefaultBotProperties
 from aiogram.types import Message, BotCommand, BotCommandScopeAllPrivateChats, BotCommandScopeAllGroupChats, BotCommandScopeChatAdministrators
+from aiogram.webhook.aiohttp_server import SimpleRequestHandler, setup_application
+from aiohttp import web
 from groq import Groq
+
+# ========= WEBHOOK (KOYEB) =========
+WEB_SERVER_HOST = os.getenv("WEB_SERVER_HOST", "0.0.0.0")
+WEB_SERVER_PORT = int(os.getenv("PORT", 8080))
+WEBHOOK_SECRET = os.getenv("WEBHOOK_SECRET", "my-super-secret")
+WEBHOOK_URL = os.getenv("WEBHOOK_URL")
+WEBHOOK_PATH = f"/webhook/{TG}"
 
 # ========= ENV =========
 TG = os.getenv("TELEGRAM_BOT_TOKEN")

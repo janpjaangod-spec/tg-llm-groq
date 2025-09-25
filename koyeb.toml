@@ -1,0 +1,37 @@
+[build]
+buildpack = "python"
+
+[deploy]
+# Основной сервис - Telegram Bot
+[[deploy.services]]
+name = "leha-bot"
+type = "web" 
+instance_type = "nano"
+regions = ["fra"]
+port = 8080
+
+# Environment variables будут установлены через веб-интерфейс Koyeb
+env = [
+  "ENVIRONMENT=production",
+  "PYTHONPATH=/app",
+  "LOG_LEVEL=INFO"
+]
+
+# Health check для проверки работоспособности
+[deploy.services.health_check]
+grace_period = "30s"
+interval = "30s"
+restart_limit = 5
+timeout = "10s"
+# path = "/health"  # Если будет включен веб-интерфейс
+
+# Автоматическое масштабирование
+[deploy.services.scaling]
+min = 1
+max = 1
+
+# Политика перезапуска при ошибках
+[deploy.services.restart_policy]
+condition = "on-failure"
+delay = "5s"
+max_attempts = 3

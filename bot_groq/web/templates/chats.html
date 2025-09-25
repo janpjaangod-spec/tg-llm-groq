@@ -1,0 +1,692 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Управление чатами - Леха Bot</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <link href="https://cdn.datatables.net/1.11.5/css/dataTables.bootstrap5.min.css" rel="stylesheet">
+    <style>
+        .sidebar {
+            height: 100vh;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            position: fixed;
+            left: 0;
+            top: 0;
+            width: 250px;
+            padding-top: 20px;
+        }
+        
+        .sidebar .nav-link {
+            color: rgba(255, 255, 255, 0.8);
+            margin: 3px 15px;
+            padding: 12px 20px;
+            border-radius: 8px;
+            transition: all 0.3s;
+        }
+        
+        .sidebar .nav-link:hover {
+            color: white;
+            background: rgba(255, 255, 255, 0.2);
+        }
+        
+        .sidebar .nav-link.active {
+            color: white;
+            background: rgba(255, 255, 255, 0.3);
+        }
+        
+        .main-content {
+            margin-left: 250px;
+            padding: 20px;
+            background: #f8f9fa;
+            min-height: 100vh;
+        }
+        
+        .table-container {
+            background: white;
+            border-radius: 15px;
+            padding: 25px;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.08);
+        }
+        
+        .chat-avatar {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-weight: bold;
+        }
+        
+        .status-badge {
+            border-radius: 20px;
+            padding: 5px 12px;
+            font-size: 0.8rem;
+            font-weight: 500;
+        }
+        
+        .status-active {
+            background: #d4edda;
+            color: #155724;
+        }
+        
+        .status-inactive {
+            background: #f8d7da;
+            color: #721c24;
+        }
+        
+        .mode-badge {
+            border-radius: 15px;
+            padding: 4px 10px;
+            font-size: 0.75rem;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        
+        .mode-normal {
+            background: #cce5ff;
+            color: #0066cc;
+        }
+        
+        .mode-silent {
+            background: #ffe6cc;
+            color: #cc6600;
+        }
+        
+        .mode-disabled {
+            background: #ffcccc;
+            color: #cc0000;
+        }
+        
+        .toxicity-indicator {
+            width: 100px;
+            height: 6px;
+            background: #e9ecef;
+            border-radius: 3px;
+            overflow: hidden;
+        }
+        
+        .toxicity-bar {
+            height: 100%;
+            border-radius: 3px;
+            transition: width 0.3s;
+        }
+        
+        .toxicity-low { background: #28a745; }
+        .toxicity-medium { background: #ffc107; }
+        .toxicity-high { background: #dc3545; }
+        
+        .action-buttons {
+            display: flex;
+            gap: 5px;
+        }
+        
+        .btn-sm {
+            padding: 4px 8px;
+            font-size: 0.8rem;
+        }
+    </style>
+</head>
+<body>
+    <!-- Боковая панель -->
+    <nav class="sidebar">
+        <div class="text-center mb-4">
+            <h4 class="text-white">
+                <i class="fas fa-robot me-2"></i>
+                Леха Bot
+            </h4>
+            <small class="text-white-50">Админ панель</small>
+        </div>
+        
+        <ul class="nav flex-column">
+            <li class="nav-item">
+                <a class="nav-link" href="/">
+                    <i class="fas fa-tachometer-alt me-2"></i>
+                    Dashboard
+                </a>
+            </li>
+            <li class="nav-item">
+                <a class="nav-link active" href="/chats">
+                    <i class="fas fa-comments me-2"></i>
+                    Чаты
+                </a>
+            </li>
+            <li class="nav-item">
+                <a class="nav-link" href="/users">
+                    <i class="fas fa-users me-2"></i>
+                    Пользователи
+                </a>
+            </li>
+            <li class="nav-item">
+                <a class="nav-link" href="/analytics">
+                    <i class="fas fa-chart-bar me-2"></i>
+                    Аналитика
+                </a>
+            </li>
+            <li class="nav-item">
+                <a class="nav-link" href="/logs">
+                    <i class="fas fa-file-alt me-2"></i>
+                    Логи
+                </a>
+            </li>
+            <li class="nav-item">
+                <a class="nav-link" href="/settings">
+                    <i class="fas fa-cog me-2"></i>
+                    Настройки
+                </a>
+            </li>
+        </ul>
+    </nav>
+
+    <!-- Основной контент -->
+    <main class="main-content">
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <h1 class="h3 mb-0">
+                <i class="fas fa-comments me-2"></i>
+                Управление чатами
+            </h1>
+            <div class="d-flex gap-2">
+                <button class="btn btn-outline-success" onclick="exportChats()">
+                    <i class="fas fa-download me-1"></i>
+                    Экспорт
+                </button>
+                <button class="btn btn-primary" onclick="refreshChats()">
+                    <i class="fas fa-sync-alt me-1"></i>
+                    Обновить
+                </button>
+            </div>
+        </div>
+
+        <!-- Фильтры -->
+        <div class="table-container mb-4">
+            <div class="row">
+                <div class="col-md-4">
+                    <div class="input-group">
+                        <span class="input-group-text">
+                            <i class="fas fa-search"></i>
+                        </span>
+                        <input type="text" class="form-control" id="search-input" 
+                               placeholder="Поиск по названию чата...">
+                    </div>
+                </div>
+                <div class="col-md-2">
+                    <select class="form-select" id="status-filter">
+                        <option value="">Все статусы</option>
+                        <option value="active">Активные</option>
+                        <option value="inactive">Неактивные</option>
+                    </select>
+                </div>
+                <div class="col-md-2">
+                    <select class="form-select" id="mode-filter">
+                        <option value="">Все режимы</option>
+                        <option value="normal">Обычный</option>
+                        <option value="silent">Тихий</option>
+                        <option value="disabled">Отключен</option>
+                    </select>
+                </div>
+                <div class="col-md-2">
+                    <select class="form-select" id="type-filter">
+                        <option value="">Все типы</option>
+                        <option value="group">Группы</option>
+                        <option value="supergroup">Супергруппы</option>
+                        <option value="private">Приватные</option>
+                    </select>
+                </div>
+                <div class="col-md-2">
+                    <button class="btn btn-outline-secondary w-100" onclick="clearFilters()">
+                        <i class="fas fa-times me-1"></i>
+                        Очистить
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Таблица чатов -->
+        <div class="table-container">
+            <table class="table table-hover" id="chats-table">
+                <thead>
+                    <tr>
+                        <th>Чат</th>
+                        <th>Тип</th>
+                        <th>Участники</th>
+                        <th>Сообщения</th>
+                        <th>Токсичность</th>
+                        <th>Режим</th>
+                        <th>Статус</th>
+                        <th>Последняя активность</th>
+                        <th>Действия</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <!-- Данные загружаются через AJAX -->
+                </tbody>
+            </table>
+        </div>
+    </main>
+
+    <!-- Модальное окно изменения режима -->
+    <div class="modal fade" id="changeModeModal" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Изменить режим работы бота</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <form id="change-mode-form">
+                        <input type="hidden" id="modal-chat-id">
+                        <div class="mb-3">
+                            <label class="form-label">Чат:</label>
+                            <div id="modal-chat-name" class="fw-bold"></div>
+                        </div>
+                        <div class="mb-3">
+                            <label for="modal-mode" class="form-label">Режим работы:</label>
+                            <select class="form-select" id="modal-mode" required>
+                                <option value="normal">Обычный - бот отвечает на все сообщения</option>
+                                <option value="silent">Тихий - бот отвечает только на упоминания</option>
+                                <option value="disabled">Отключен - бот не отвечает</option>
+                            </select>
+                        </div>
+                        <div class="mb-3">
+                            <label for="modal-reason" class="form-label">Причина изменения (опционально):</label>
+                            <textarea class="form-control" id="modal-reason" rows="3"></textarea>
+                        </div>
+                    </form>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Отмена</button>
+                    <button type="button" class="btn btn-primary" onclick="saveChatMode()">Сохранить</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Модальное окно статистики чата -->
+    <div class="modal fade" id="chatStatsModal" tabindex="-1">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Статистика чата</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div id="chat-stats-content">
+                        <!-- Контент загружается динамически -->
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <script src="https://cdn.datatables.net/1.11.5/js/jquery.dataTables.min.js"></script>
+    <script src="https://cdn.datatables.net/1.11.5/js/dataTables.bootstrap5.min.js"></script>
+    
+    <script>
+        let chatsTable;
+        
+        $(document).ready(function() {
+            initDataTable();
+            loadChats();
+            
+            // Поиск в реальном времени
+            $('#search-input').on('keyup', function() {
+                chatsTable.search(this.value).draw();
+            });
+            
+            // Фильтры
+            $('#status-filter, #mode-filter, #type-filter').on('change', function() {
+                applyFilters();
+            });
+        });
+        
+        function initDataTable() {
+            chatsTable = $('#chats-table').DataTable({
+                pageLength: 25,
+                ordering: true,
+                searching: true,
+                info: true,
+                responsive: true,
+                language: {
+                    url: '//cdn.datatables.net/plug-ins/1.11.5/i18n/ru.json'
+                },
+                columnDefs: [
+                    { orderable: false, targets: [8] } // Колонка действий
+                ]
+            });
+        }
+        
+        async function loadChats() {
+            try {
+                showLoading();
+                
+                const response = await fetch('/api/chats', {
+                    headers: {
+                        'Authorization': 'Bearer ' + getAuthToken()
+                    }
+                });
+                
+                if (response.ok) {
+                    const chats = await response.json();
+                    populateChatsTable(chats);
+                } else {
+                    throw new Error('Failed to load chats');
+                }
+                
+            } catch (error) {
+                console.error('Error loading chats:', error);
+                showAlert('Ошибка загрузки чатов', 'danger');
+            } finally {
+                hideLoading();
+            }
+        }
+        
+        function populateChatsTable(chats) {
+            chatsTable.clear();
+            
+            chats.forEach(chat => {
+                const row = [
+                    formatChatInfo(chat),
+                    formatChatType(chat.type),
+                    chat.members_count || 'N/A',
+                    chat.total_messages || 0,
+                    formatToxicityIndicator(chat.avg_toxicity || 0),
+                    formatModeBadge(chat.mode || 'normal'),
+                    formatStatusBadge(chat.is_active),
+                    formatLastActivity(chat.last_activity),
+                    formatActionButtons(chat)
+                ];
+                
+                chatsTable.row.add(row);
+            });
+            
+            chatsTable.draw();
+        }
+        
+        function formatChatInfo(chat) {
+            const avatar = chat.title ? chat.title.charAt(0).toUpperCase() : '#';
+            return `
+                <div class="d-flex align-items-center">
+                    <div class="chat-avatar me-3">${avatar}</div>
+                    <div>
+                        <div class="fw-bold">${chat.title || 'Приватный чат'}</div>
+                        <small class="text-muted">ID: ${chat.chat_id}</small>
+                    </div>
+                </div>
+            `;
+        }
+        
+        function formatChatType(type) {
+            const typeMap = {
+                'private': 'Приватный',
+                'group': 'Группа',
+                'supergroup': 'Супергруппа',
+                'channel': 'Канал'
+            };
+            return typeMap[type] || type;
+        }
+        
+        function formatToxicityIndicator(level) {
+            const percentage = Math.round(level * 100);
+            let className = 'toxicity-low';
+            if (percentage > 30) className = 'toxicity-medium';
+            if (percentage > 60) className = 'toxicity-high';
+            
+            return `
+                <div class="toxicity-indicator">
+                    <div class="toxicity-bar ${className}" style="width: ${percentage}%"></div>
+                </div>
+                <small class="text-muted">${percentage}%</small>
+            `;
+        }
+        
+        function formatModeBadge(mode) {
+            const modeMap = {
+                'normal': { class: 'mode-normal', text: 'Обычный' },
+                'silent': { class: 'mode-silent', text: 'Тихий' },
+                'disabled': { class: 'mode-disabled', text: 'Отключен' }
+            };
+            
+            const config = modeMap[mode] || modeMap['normal'];
+            return `<span class="mode-badge ${config.class}">${config.text}</span>`;
+        }
+        
+        function formatStatusBadge(isActive) {
+            return isActive 
+                ? '<span class="status-badge status-active">Активный</span>'
+                : '<span class="status-badge status-inactive">Неактивный</span>';
+        }
+        
+        function formatLastActivity(timestamp) {
+            if (!timestamp) return 'Никогда';
+            const date = new Date(timestamp);
+            return date.toLocaleString('ru-RU');
+        }
+        
+        function formatActionButtons(chat) {
+            return `
+                <div class="action-buttons">
+                    <button class="btn btn-outline-primary btn-sm" onclick="changeChatMode(${chat.chat_id}, '${chat.title || 'Приватный чат'}', '${chat.mode || 'normal'}')" title="Изменить режим">
+                        <i class="fas fa-cog"></i>
+                    </button>
+                    <button class="btn btn-outline-info btn-sm" onclick="showChatStats(${chat.chat_id})" title="Статистика">
+                        <i class="fas fa-chart-bar"></i>
+                    </button>
+                    <button class="btn btn-outline-secondary btn-sm" onclick="exportChatData(${chat.chat_id})" title="Экспорт">
+                        <i class="fas fa-download"></i>
+                    </button>
+                </div>
+            `;
+        }
+        
+        function changeChatMode(chatId, chatName, currentMode) {
+            $('#modal-chat-id').val(chatId);
+            $('#modal-chat-name').text(chatName);
+            $('#modal-mode').val(currentMode);
+            $('#modal-reason').val('');
+            
+            const modal = new bootstrap.Modal(document.getElementById('changeModeModal'));
+            modal.show();
+        }
+        
+        async function saveChatMode() {
+            try {
+                const chatId = $('#modal-chat-id').val();
+                const mode = $('#modal-mode').val();
+                const reason = $('#modal-reason').val();
+                
+                const response = await fetch('/api/chats/mode', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': 'Bearer ' + getAuthToken()
+                    },
+                    body: JSON.stringify({
+                        chat_id: parseInt(chatId),
+                        mode: mode,
+                        reason: reason
+                    })
+                });
+                
+                if (response.ok) {
+                    const result = await response.json();
+                    showAlert(result.message, 'success');
+                    
+                    // Закрываем модальное окно
+                    const modal = bootstrap.Modal.getInstance(document.getElementById('changeModeModal'));
+                    modal.hide();
+                    
+                    // Обновляем таблицу
+                    loadChats();
+                } else {
+                    throw new Error('Failed to update chat mode');
+                }
+                
+            } catch (error) {
+                console.error('Error updating chat mode:', error);
+                showAlert('Ошибка изменения режима чата', 'danger');
+            }
+        }
+        
+        async function showChatStats(chatId) {
+            try {
+                const response = await fetch(`/api/analytics/chat/${chatId}`, {
+                    headers: {
+                        'Authorization': 'Bearer ' + getAuthToken()
+                    }
+                });
+                
+                if (response.ok) {
+                    const data = await response.json();
+                    const analytics = data.analytics;
+                    
+                    const content = `
+                        <div class="row">
+                            <div class="col-md-6">
+                                <h6>Общая статистика</h6>
+                                <ul class="list-unstyled">
+                                    <li><strong>Всего сообщений:</strong> ${analytics.total_messages}</li>
+                                    <li><strong>Активные пользователи:</strong> ${analytics.active_users.length}</li>
+                                    <li><strong>Средняя токсичность:</strong> ${(analytics.avg_toxicity_level * 100).toFixed(1)}%</li>
+                                    <li><strong>Последняя активность:</strong> ${new Date(analytics.last_activity_time).toLocaleString('ru-RU')}</li>
+                                </ul>
+                            </div>
+                            <div class="col-md-6">
+                                <h6>Популярные слова</h6>
+                                <div class="d-flex flex-wrap gap-1">
+                                    ${analytics.popular_words.slice(0, 10).map(word => 
+                                        `<span class="badge bg-secondary">${word}</span>`
+                                    ).join('')}
+                                </div>
+                            </div>
+                        </div>
+                    `;
+                    
+                    document.getElementById('chat-stats-content').innerHTML = content;
+                    
+                    const modal = new bootstrap.Modal(document.getElementById('chatStatsModal'));
+                    modal.show();
+                } else {
+                    throw new Error('Failed to load chat stats');
+                }
+                
+            } catch (error) {
+                console.error('Error loading chat stats:', error);
+                showAlert('Ошибка загрузки статистики чата', 'danger');
+            }
+        }
+        
+        function applyFilters() {
+            const statusFilter = $('#status-filter').val();
+            const modeFilter = $('#mode-filter').val();
+            const typeFilter = $('#type-filter').val();
+            
+            // Применяем фильтры к DataTable
+            chatsTable.columns().search('');
+            
+            if (statusFilter) {
+                chatsTable.column(6).search(statusFilter);
+            }
+            if (modeFilter) {
+                chatsTable.column(5).search(modeFilter);
+            }
+            if (typeFilter) {
+                chatsTable.column(1).search(typeFilter);
+            }
+            
+            chatsTable.draw();
+        }
+        
+        function clearFilters() {
+            $('#search-input').val('');
+            $('#status-filter').val('');
+            $('#mode-filter').val('');
+            $('#type-filter').val('');
+            
+            chatsTable.search('').columns().search('').draw();
+        }
+        
+        function refreshChats() {
+            loadChats();
+        }
+        
+        async function exportChats() {
+            try {
+                showAlert('Экспорт начат...', 'info');
+                
+                const response = await fetch('/api/chats?limit=1000', {
+                    headers: {
+                        'Authorization': 'Bearer ' + getAuthToken()
+                    }
+                });
+                
+                if (response.ok) {
+                    const chats = await response.json();
+                    
+                    // Создаем CSV
+                    const csv = convertToCSV(chats);
+                    downloadCSV(csv, 'chats.csv');
+                    
+                    showAlert('Экспорт завершен', 'success');
+                } else {
+                    throw new Error('Export failed');
+                }
+                
+            } catch (error) {
+                console.error('Export error:', error);
+                showAlert('Ошибка экспорта', 'danger');
+            }
+        }
+        
+        function convertToCSV(data) {
+            const headers = ['ID чата', 'Название', 'Тип', 'Участники', 'Сообщения', 'Токсичность', 'Режим', 'Статус'];
+            const rows = data.map(chat => [
+                chat.chat_id,
+                chat.title || 'Приватный чат',
+                chat.type,
+                chat.members_count || 0,
+                chat.total_messages || 0,
+                (chat.avg_toxicity * 100).toFixed(1) + '%',
+                chat.mode || 'normal',
+                chat.is_active ? 'Активный' : 'Неактивный'
+            ]);
+            
+            return [headers, ...rows].map(row => row.map(field => `"${field}"`).join(',')).join('\n');
+        }
+        
+        function downloadCSV(csv, filename) {
+            const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+            const link = document.createElement('a');
+            const url = URL.createObjectURL(blob);
+            link.setAttribute('href', url);
+            link.setAttribute('download', filename);
+            link.style.visibility = 'hidden';
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+        }
+        
+        function showLoading() {
+            // Показать индикатор загрузки
+        }
+        
+        function hideLoading() {
+            // Скрыть индикатор загрузки
+        }
+        
+        function showAlert(message, type) {
+            // Показать уведомление
+            console.log(`${type.toUpperCase()}: ${message}`);
+        }
+        
+        function getAuthToken() {
+            return localStorage.getItem('admin_token') || '';
+        }
+    </script>
+</body>
+</html>

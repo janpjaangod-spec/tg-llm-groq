@@ -1,0 +1,133 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+ENV/
+env.bak/
+venv.bak/
+.venv/
+
+# Переменные окружения и секреты
+.env
+.env.local
+.env.production
+.env.development
+*.key
+*.pem
+config.ini
+
+# База данных
+*.db
+*.sqlite
+*.sqlite3
+data/
+database/
+*.db-journal
+
+# Логи
+logs/
+*.log
+*.log.*
+bot.log*
+
+# Временные файлы
+*.tmp
+*.temp
+.tmp/
+.cache/
+temp/
+
+# IDE и редакторы
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.vim/
+.emacs.d/
+
+# OS специфичные файлы
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+desktop.ini
+
+# Docker
+.dockerignore
+docker-compose.override.yml
+.docker/
+
+# Backup файлы
+*.backup
+*.bak
+*.old
+backup/
+
+# Test coverage и тестирование
+htmlcov/
+.coverage
+.coverage.*
+coverage.xml
+*.cover
+.hypothesis/
+.pytest_cache/
+.tox/
+nosetests.xml
+test-results/
+
+# Jupyter Notebook
+.ipynb_checkpoints
+
+# pyenv
+.python-version
+
+# pipenv
+Pipfile.lock
+
+# poetry
+poetry.lock
+
+# Environments
+.env.backup
+.env.save
+
+# mypy
+.mypy_cache/
+.dmypy.json
+dmypy.json
+
+# Pyre type checker
+.pyre/
+
+# Telegram Bot специфичные
+user_data/
+bot_data/
+conversations/
+
+# Groq API cache
+.groq_cache/
+
+# Web interface uploads
+uploads/
+static/uploads/
+
+# Analytics data
+analytics/
+reports/
+
+# SSL certificates
+ssl/
+certs/
+
+# Development only
+dev/
+sandbox/
+experiments/
