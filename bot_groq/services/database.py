@@ -5,10 +5,35 @@ from contextlib import closing
 from typing import List, Dict, Any, Tuple, Optional
 
 from bot_groq.config.settings import settings
+import os
+import logging
+
+_db_logger = logging.getLogger("database")
+_db_path_logged = False  # чтобы не засорять логи повторениями
 
 def get_db_connection():
-    """Возвращает соединение с базой данных."""
-    return sqlite3.connect(settings.db_name)
+    """Возвращает соединение с базой данных.
+    Делает папку при необходимости и один раз логирует фактический путь.
+    """
+    global _db_path_logged
+    db_path = settings.db_name
+    # Если указали URL по ошибке (например https://...), предупреждаем.
+    if db_path.startswith("http://") or db_path.startswith("https://"):
+        # Нам явно подсунули не путь, а домен/URL – это распространённая ошибка при настройке ENV.
+        raise RuntimeError(
+            f"DB_NAME='{db_path}' выглядит как URL. Ожидается путь к файлу, например /data/bot.db"
+        )
+    # Создаём директорию если путь содержит каталог и он отсутствует
+    try:
+        parent = os.path.dirname(db_path)
+        if parent and parent not in {".", ""}:
+            os.makedirs(parent, exist_ok=True)
+    except Exception as e:
+        _db_logger.warning(f"Не удалось создать директорию для БД '{db_path}': {e}")
+    if not _db_path_logged:
+        _db_logger.info(f"Использую файл БД: {os.path.abspath(db_path)}")
+        _db_path_logged = True
+    return sqlite3.connect(db_path)
 
 def initialize_database():
     """Инициализирует базу данных и создает таблицы, если они не существуют."""

@@ -1,57 +1,26 @@
-#!/usr/bin/env    try:
-        from bot_groq.config.settings import settings
-        
-        print("✅ Настройки загружены успешно!")
-        print(f"📱 Bot token: {'*' * 10}...{settings.bot_token[-10:] if settings.bot_token and len(settings.bot_token) > 20 else 'NOT SET'}")
-        print(f"🤖 Groq API key: {'*' * 10}...{settings.groq_api_key[-10:] if settings.groq_api_key and len(settings.groq_api_key) > 20 else 'NOT SET'}")
-        print(f"👤 Admin token: {settings.admin_token or 'NOT SET'}")
-        print(f"🎯 Name keywords: {settings.name_keywords_list}")
-        print(f"🌍 Environment: {settings.environment}")
-        print(f"📊 Log level: {settings.log_level}")
-
-        # Проверяем валидацию
-        try:
-            settings.validate_required_fields()
-            print("✅ Валидация обязательных полей пройдена")
-        except ValueError as e:
-            print(f"❌ Ошибка валидации: {e}") настроек - проверяем что конфигурация загружается без ошибок.
+"""Вспомогательный скрипт для быстрой проверки загрузки настроек.
+Не используется в проде; можно запустить локально: python test_settings.py
 """
+from bot_groq.config.settings import settings
 
-import sys
-import os
-from pathlib import Path
 
-# Добавляем путь к проекту
-sys.path.insert(0, str(Path(__file__).parent))
-
-def test_settings():
-    """Тестируем загрузку настроек."""
+def main() -> int:
     try:
-        from bot_groq.config.settings import settings
-        
-        print("✅ Настройки загружены успешно!")
-        print(f"📱 Bot token: {'*' * 10}...{settings.bot_token[-10:] if settings.bot_token and len(settings.bot_token) > 20 else 'NOT SET'}")
-    print(f"🤖 Groq API key: {'*' * 10}...{settings.groq_api_key[-10:] if settings.groq_api_key and len(settings.groq_api_key) > 20 else 'NOT SET'}")
-    print(f"� Admin token: {settings.admin_token or 'NOT SET'}")
-    print(f"🎯 Name keywords: {settings.name_keywords_list}")
-    print(f"🌍 Environment: {settings.environment}")
-    print(f"� Log level: {settings.log_level}")
-
-    # Проверяем валидацию
-    try:
+        print("✅ Настройки загружены")
+        bt = settings.bot_token
+        print(f"📱 Bot token: {bt[:6]+'...'+bt[-4:] if bt and len(bt)>14 else bt or 'NOT SET'}")
+        print(f"🤖 Groq key set: {'YES' if settings.groq_api_key else 'NO'}")
+        print(f"👑 Admin IDs: {sorted(settings.admin_ids)}")
+        print(f"🌐 TZ: {settings.timezone} | ENV: {settings.environment}")
+        print(f"🗃 DB: {settings.db_name}")
         settings.validate_required_fields()
-        print("✅ Валидация обязательных полей пройдена")
-    except ValueError as e:
-        print(f"❌ Ошибка валидации: {e}")
-        
-        return True
-        
+        print("✅ Валидация обязательных полей прошла")
+        return 0
     except Exception as e:
-        print(f"❌ Ошибка загрузки настроек: {e}")
-        import traceback
-        traceback.print_exc()
-        return False
+        print(f"❌ Ошибка: {e}")
+        return 1
 
-if __name__ == "__main__":
-    success = test_settings()
-    sys.exit(0 if success else 1)
+
+if __name__ == "__main__":  # pragma: no cover
+    import sys
+    sys.exit(main())

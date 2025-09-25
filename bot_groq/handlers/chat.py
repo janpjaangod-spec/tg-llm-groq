@@ -17,7 +17,7 @@ from bot_groq.core.style_analysis import get_style_adaptation_prompt
 
 router = Router()
 
-def should_respond(message: Message, bot_username: str) -> tuple[bool, str]:
+async def should_respond(message: Message, bot_username: str) -> tuple[bool, str]:
     """
     Определяет, должен ли бот ответить на сообщение.
     Возвращает (should_respond, reason).
@@ -188,7 +188,7 @@ async def handle_text_message(message: Message):
         update_person_profile(message, bot_info.username)
         
         # Определяем, нужно ли отвечать
-        should_resp, reason = should_respond(message, bot_info.username)
+        should_resp, reason = await should_respond(message, bot_info.username)
         
         if should_resp:
             # Генерируем и отправляем ответ
