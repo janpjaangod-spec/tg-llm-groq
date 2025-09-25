@@ -6,26 +6,38 @@ from bot_groq.config.settings import settings
 
 # Список известных (разрешённых) моделей Groq. Можно расширять.
 KNOWN_MODELS = {
-    # Llama 3.1
+    # --- Llama 3.1 ---
     "llama-3.1-8b-instant",
     "llama-3.1-70b-versatile",
     "llama-3.1-405b-reasoning",
-    # Llama 3.2 preview
+    # --- Llama 3.2 Preview ---
     "llama-3.2-1b-preview",
     "llama-3.2-3b-preview",
     "llama-3.2-11b-text-preview",
     "llama-3.2-90b-text-preview",
-    # Llama 3.3 (добавлены предположительные слаги — если какие-то отсутствуют у аккаунта, команда /models покажет)
+    # --- Llama 3.3 (доступ может отличаться по аккаунтам) ---
     "llama-3.3-8b-instant",
     "llama-3.3-70b-versatile",
-    # Возможные дополнительные (раскомментируйте при появлении доступа)
-    # "llama-3.3-405b-reasoning",
+    # --- OpenAI OSS модели на Groq (из панели, скрин пользователя) ---
+    "openai/gpt-oss-12b",
+    "openai/gpt-oss-20b",
+    # --- Guard / системные (опционально можно использовать вручную) ---
+    "meta-llama/llama-guard-4-12b",
+    # --- Compound systems (для тестов – отвечают иначе) ---
+    "groq/compound",
+    "groq/compound-mini",
 }
 
 DEFAULT_MODEL = "llama-3.1-8b-instant"
 
 def _normalize_model(name: str | None) -> str:
-    """Сохраняем старое поведение для внутренних вызовов (тихий fallback)."""
+    """Нормализует имя модели.
+    Логика:
+      * Пусто -> DEFAULT_MODEL
+      * Точное совпадение в KNOWN_MODELS – принимаем (включая слеги с '/')
+      * Опечатка '12ob' -> '120b' (исторический костыль)
+      * Всё остальное -> DEFAULT_MODEL (тихий fallback)
+    """
     if not name:
         return DEFAULT_MODEL
     raw = name.strip()
@@ -36,8 +48,7 @@ def _normalize_model(name: str | None) -> str:
         candidate = lower.replace("12ob", "120b")
         if candidate in KNOWN_MODELS:
             return candidate
-    if "/" in raw and not raw.startswith("meta-llama"):
-        return DEFAULT_MODEL
+    # Неизвестная модель – fallback
     return DEFAULT_MODEL
 
 def is_known_model(name: str) -> bool:

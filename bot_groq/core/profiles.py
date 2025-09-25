@@ -14,6 +14,7 @@ DEFAULT_PROFILE = {
     "to_bot_terms": [],         # как он зовёт бота
     "likes": [], "dislikes": [],
     "notes": [],
+    "facts": {},                # простые факт-поля: age, height, etc.
     "spice": 1,                 # общий «перч» 0..3
     "to_bot_tone": 0.0,         # -1..+1 отношение к боту
     "username": "", "display_name": ""
@@ -52,7 +53,7 @@ def _tone_delta(txt: str) -> float:
 def _extract_person_facts(text: str) -> Dict[str, Any]:
     """Извлекает персональные факты из текста сообщения."""
     low = (text or "").lower().replace("ё", "е")
-    facts = {"names": [], "aliases": [], "address_terms": [], "likes": [], "dislikes": [], "spice_inc": 0}
+    facts = {"names": [], "aliases": [], "address_terms": [], "likes": [], "dislikes": [], "spice_inc": 0, "age": None, "height": None}
     
     # Извлечение имен
     for m in re.findall(r"(?:меня зовут|зови меня)\s+([a-zа-я]{3,20})", low):
@@ -74,6 +75,24 @@ def _extract_person_facts(text: str) -> Dict[str, Any]:
     if any(p in low for p in PROFANITY):
         facts["spice_inc"] = 1
     
+    # Возраст: «мне 25», "мне 13", "мне 13 лет"
+    m_age = re.search(r"мне\s+(\d{1,2})\s*(?:лет|года|год)?", low)
+    if m_age:
+        try:
+            age = int(m_age.group(1))
+            if 5 < age < 90:
+                facts["age"] = age
+        except Exception:
+            pass
+    # Рост: "мой рост 145" / "рост 180" / "я ростом 172"
+    m_height = re.search(r"(?:мой\s+)?рост\s+(\d{2,3})", low)
+    if m_height:
+        try:
+            h = int(m_height.group(1))
+            if 80 < h < 230:
+                facts["height"] = h
+        except Exception:
+            pass
     return facts
 
 def _load_person(chat_id: int, user_id: int) -> Dict[str, Any]:
@@ -88,10 +107,11 @@ def _save_person(chat_id: int, user_id: int, prof: Dict[str, Any]):
     db_save_person(chat_id, user_id, prof)
 
 def update_person_profile(m: Message, bot_username: Optional[str] = None):
+    """Обновляет профиль пользователя на основе сообщения.
+    Ранее ограничивались только группами – из-за этого в личке бот «не помнил» факты.
+    Теперь пишем и для private, чтобы помнить возраст/рост и пр.
     """
-    Обновляет профиль пользователя на основе сообщения.
-    """
-    if m.chat.type not in {"group", "supergroup"}:
+    if m.from_user is None:
         return
     
     u = m.from_user
@@ -109,6 +129,12 @@ def update_person_profile(m: Message, bot_username: Optional[str] = None):
     for k in ["names", "aliases", "address_terms", "likes", "dislikes"]:
         for v in facts.get(k, []):
             _push_unique(prof[k], v)
+    # Простые факты
+    pfacts = prof.setdefault("facts", {})
+    if facts.get("age"):
+        pfacts["age"] = facts["age"]
+    if facts.get("height"):
+        pfacts["height"] = facts["height"]
 
     # Обновление уровня токсичности
     if facts.get("spice_inc"):
@@ -170,7 +196,13 @@ def person_prompt_addon(chat_id: int, user_id: int) -> str:
     else:
         bot_mood = "нейтрален. Нужно это исправить."
 
+    age = p.get("facts", {}).get("age")
+    height = p.get("facts", {}).get("height")
     lines = [f"Цель: {name}."]
+    if age:
+        lines.append(f"Возраст (используй чтобы подъебать): {age}")
+    if height:
+        lines.append(f"Рост (тоже уязвимость): {height}")
     if like:
         lines.append(f"Его увлечения (идеальная мишень для насмешек): {like}.")
     if dislike:

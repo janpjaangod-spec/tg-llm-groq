@@ -77,22 +77,25 @@ async def handle_photo(message: Message):
         
         # Определяем, нужно ли анализировать фото
         should_analyze = False
-        
-        # Прямое обращение к боту
-        if message.caption and f"@{bot_info.username}" in message.caption.lower():
+        reason = ""  # для логирования
+
+        if message.chat.type == "private":
             should_analyze = True
-        
-        # Ключевые слова в подписи
-        elif message.caption and any(keyword.lower() in message.caption.lower() 
-                                   for keyword in settings.name_keywords_list):
-            should_analyze = True
-        
-        # Случайный анализ (меньший шанс чем для текста)
-        elif random.randint(1, 100) <= (settings.response_chance // 2):
-            should_analyze = True
-        
+            reason = "private"
+        elif message.caption and f"@{bot_info.username}" in message.caption.lower():
+            should_analyze = True; reason = "mention"
+        elif message.caption and any(keyword.lower() in message.caption.lower() for keyword in settings.name_keywords_list):
+            should_analyze = True; reason = "keyword"
+        elif random.randint(1, 100) <= max(1, settings.response_chance // 2):
+            should_analyze = True; reason = "random"
+
         if not should_analyze:
+            if settings.debug:
+                print(f"[vision] skip photo chat={message.chat.id} reason=no_trigger caption={message.caption!r}")
             return
+        else:
+            if settings.debug:
+                print(f"[vision] analyze photo chat={message.chat.id} reason={reason} caption={message.caption!r}")
         
         # Анализируем фото
         photo = message.photo[-1]  # Берем самое большое разрешение
@@ -103,16 +106,41 @@ async def handle_photo(message: Message):
             return
         
         try:
-            # Анализируем изображение
-            vision_prompt = "Опиши что видишь на этом изображении в токсичном стиле. Будь саркастичным и колким."
-            
+            # Строим промпт – добавляем последние текстовые сообщения как фон (до 5)
+            from bot_groq.services.database import db_get_chat_tail
+            tail = db_get_chat_tail(message.chat.id, limit=8)
+            last_texts = []
+            for h in tail[-8:]:
+                c = h.get('content')
+                if not c or c.startswith('[ФОТО]'):
+                    continue
+                last_texts.append(c[:120])
+                if len(last_texts) >= 5:
+                    break
+            context_snip = (" | ".join(last_texts)) if last_texts else "ничего полезного"
+
+            vision_prompt = (
+                "Ты видишь новое фото в чате. Опиши СУТЬ максимально колко и едко."
+                " Если на фото документы/текст – НЕ переписывай полностью, просто съязви."
+                f" Контекст последних сообщений: {context_snip}."
+            )
             if message.caption:
-                vision_prompt += f" Подпись к фото: '{message.caption}'"
-            
-            # llm_vision синхронная и ждёт system_prompt, image_path, user_prompt
+                vision_prompt += f" Пользователь добавил подпись: '{message.caption[:150]}'"
+
+            # Превращаем локальный файл в data URL (Groq поддерживает image_url с URL. data: может быть не поддержан – если не сработает, останется fallback на путь)
+            data_url = None
+            try:
+                with open(temp_file_path, 'rb') as f:
+                    b64 = base64.b64encode(f.read()).decode('ascii')
+                    data_url = f"data:image/jpeg;base64,{b64}"
+            except Exception:
+                pass
+
+            image_ref = data_url or temp_file_path
+
             response = llm_vision(
-                system_prompt="Ты токсично комментируешь фотографии. Пиши по-русски, колко.",
-                image_url=temp_file_path,
+                system_prompt="Ты токсично комментируешь фотографии. Пиши по-русски, язвительно, коротко.",
+                image_url=image_ref,
                 user_prompt=vision_prompt
             )
             

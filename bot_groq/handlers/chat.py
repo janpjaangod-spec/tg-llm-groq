@@ -78,8 +78,8 @@ async def should_respond(message: Message, bot_username: str) -> tuple[bool, str
 async def generate_contextual_response(message: Message, trigger_reason: str) -> str:
     """Генерирует контекстуальный ответ на сообщение."""
     
-    # Получаем историю сообщений для контекста
-    history = db_get_chat_tail(message.chat.id, limit=10)
+    # Получаем историю сообщений для контекста (используем настройку)
+    history = db_get_chat_tail(message.chat.id, limit=settings.history_turns)
     
     # Обновляем профиль пользователя
     bot_info = await message.bot.get_me()
@@ -110,16 +110,22 @@ async def generate_contextual_response(message: Message, trigger_reason: str) ->
         if manipulation_context:
             prompt_parts.append(manipulation_context)
     
-    # Контекст последних сообщений
+    # Контекст последних сообщений – берём больше и используем правильный ключ 'content'
     if len(history) > 1:
         recent_context = []
-        for msg in history[-3:]:
-            if msg.get('text'):
-                username = msg.get('username', f"User_{msg.get('user_id', 'Unknown')}")
-                recent_context.append(f"{username}: {msg['text']}")
-        
+        # Откидываем системные / пустые
+        for msg in history[-min(12, len(history)):]:
+            content = msg.get('content')
+            if not content:
+                continue
+            if content.startswith('[ФОТО]'):
+                content = '[image]'
+            username = msg.get('username') or f"U{msg.get('user_id','?')}"
+            role = msg.get('role')
+            prefix = 'бот' if role == 'assistant' else username
+            recent_context.append(f"{prefix}: {content[:400]}")
         if recent_context:
-            prompt_parts.append(f"КОНТЕКСТ БЕСЕДЫ:\n" + "\n".join(recent_context))
+            prompt_parts.append("КОНТЕКСТ (последние сообщения, новое в конце):\n" + "\n".join(recent_context[-10:]))
     
     # Финальный промпт
     full_prompt = "\n\n".join(prompt_parts)
