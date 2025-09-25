@@ -8,7 +8,7 @@ import tempfile
 import os
 
 from bot_groq.config.settings import settings
-from bot_groq.services.database import db_add_chat_message, db_load_person
+from bot_groq.services.database import db_add_chat_message, db_load_person, log_chat_event
 from bot_groq.services.llm import llm_vision, llm_text
 from bot_groq.core.profiles import update_person_profile
 
@@ -55,12 +55,13 @@ async def handle_photo(message: Message):
     """Обработчик фотографий."""
     try:
         # Сохраняем сообщение в базу
-        db_add_chat_message(
+        log_chat_event(
             chat_id=message.chat.id,
             user_id=message.from_user.id,
             username=message.from_user.username or "",
             text=f"[ФОТО] {message.caption or ''}",
-            timestamp=time.time()
+            timestamp=time.time(),
+            is_bot=False
         )
         
         # Обновляем профиль пользователя
@@ -114,12 +115,13 @@ async def handle_photo(message: Message):
                 await message.reply(response)
                 
                 # Сохраняем ответ бота
-                db_add_chat_message(
+                log_chat_event(
                     chat_id=message.chat.id,
                     user_id=bot_info.id,
                     username=bot_info.username,
                     text=response,
-                    timestamp=time.time()
+                    timestamp=time.time(),
+                    is_bot=True
                 )
             else:
                 # Fallback ответы на фото
@@ -143,12 +145,13 @@ async def handle_sticker(message: Message):
     """Обработчик стикеров."""
     try:
         # Сохраняем в базу
-        db_add_chat_message(
+        log_chat_event(
             chat_id=message.chat.id,
             user_id=message.from_user.id,
             username=message.from_user.username or "",
             text=f"[СТИКЕР] {message.sticker.emoji if message.sticker.emoji else ''}",
-            timestamp=time.time()
+            timestamp=time.time(),
+            is_bot=False
         )
         
         # Обновляем профиль пользователя  
@@ -196,12 +199,13 @@ async def handle_gif(message: Message):
     """Обработчик GIF-анимаций."""
     try:
         # Сохраняем в базу
-        db_add_chat_message(
+        log_chat_event(
             chat_id=message.chat.id,
             user_id=message.from_user.id,
             username=message.from_user.username or "",
             text=f"[GIF] {message.caption or ''}",
-            timestamp=time.time()
+            timestamp=time.time(),
+            is_bot=False
         )
         
         # Обновляем профиль пользователя
@@ -250,12 +254,13 @@ async def handle_video(message: Message):
     """Обработчик видео."""
     try:
         # Сохраняем в базу
-        db_add_chat_message(
+        log_chat_event(
             chat_id=message.chat.id,
             user_id=message.from_user.id,
             username=message.from_user.username or "",
             text=f"[ВИДЕО] {message.caption or ''}",
-            timestamp=time.time()
+            timestamp=time.time(),
+            is_bot=False
         )
         
         # Обновляем профиль пользователя
@@ -304,12 +309,13 @@ async def handle_voice(message: Message):
     """Обработчик голосовых сообщений."""
     try:
         # Сохраняем в базу
-        db_add_chat_message(
+        log_chat_event(
             chat_id=message.chat.id,
             user_id=message.from_user.id,
             username=message.from_user.username or "",
             text=f"[ГОЛОСОВОЕ СООБЩЕНИЕ] Длительность: {message.voice.duration}с",
-            timestamp=time.time()
+            timestamp=time.time(),
+            is_bot=False
         )
         
         # Обновляем профиль пользователя
@@ -372,12 +378,13 @@ async def handle_document(message: Message):
         doc_name = message.document.file_name or "unknown"
         doc_size = message.document.file_size or 0
         
-        db_add_chat_message(
+        log_chat_event(
             chat_id=message.chat.id,
             user_id=message.from_user.id,
             username=message.from_user.username or "",
             text=f"[ДОКУМЕНТ] {doc_name} ({doc_size} байт) {message.caption or ''}",
-            timestamp=time.time()
+            timestamp=time.time(),
+            is_bot=False
         )
         
         # Обновляем профиль пользователя

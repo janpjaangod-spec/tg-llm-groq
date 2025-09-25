@@ -17,7 +17,8 @@ router = Router()
 
 def is_admin(user_id: int) -> bool:
     """Проверяет, является ли пользователь администратором."""
-    return user_id in settings.admin_user_ids
+    # Используем поле admin_ids из настроек (множество int)
+    return user_id in settings.admin_ids
 
 @router.message(Command("stats"))
 async def cmd_stats(message: Message):
@@ -137,7 +138,9 @@ async def cmd_who(message: Message):
 @router.message(Command("clear_history"))
 async def cmd_clear_history(message: Message):
     """Очищает историю сообщений (только для главного админа)."""
-    if message.from_user.id != settings.admin_user_ids[0]:
+    # Главным админом считаем первого в отсортированном списке admin_ids
+    primary_admin = next(iter(sorted(settings.admin_ids))) if settings.admin_ids else None
+    if message.from_user.id != primary_admin:
         await message.reply("🚫 Команда доступна только главному администратору")
         return
     
@@ -159,7 +162,8 @@ async def cmd_clear_history(message: Message):
 @router.message(Command("export_data"))
 async def cmd_export_data(message: Message):
     """Экспортирует данные чата (только для главного админа)."""
-    if message.from_user.id != settings.admin_user_ids[0]:
+    primary_admin = next(iter(sorted(settings.admin_ids))) if settings.admin_ids else None
+    if message.from_user.id != primary_admin:
         await message.reply("🚫 Команда доступна только главному администратору")
         return
     
@@ -192,7 +196,8 @@ async def cmd_export_data(message: Message):
 @router.message(Command("global_stats"))
 async def cmd_global_stats(message: Message):
     """Показывает глобальную статистику по всем чатам (только для главного админа)."""
-    if message.from_user.id != settings.admin_user_ids[0]:
+    primary_admin = next(iter(sorted(settings.admin_ids))) if settings.admin_ids else None
+    if message.from_user.id != primary_admin:
         await message.reply("🚫 Команда доступна только главному администратору")
         return
     
@@ -308,7 +313,8 @@ async def cmd_set_mode(message: Message):
 @router.message(Command("debug"))
 async def cmd_debug(message: Message):
     """Показывает отладочную информацию (только для главного админа)."""
-    if message.from_user.id != settings.admin_user_ids[0]:
+    primary_admin = next(iter(sorted(settings.admin_ids))) if settings.admin_ids else None
+    if message.from_user.id != primary_admin:
         await message.reply("🚫 Команда доступна только главному администратору")
         return
     
@@ -330,7 +336,7 @@ async def cmd_debug(message: Message):
             f"🕐 Время работы: {int(time.time() - process.create_time())} сек",
             f"",
             f"⚙️ Настройки:",
-            f"• Admin IDs: {len(settings.admin_user_ids)}",
+            f"• Admin IDs: {len(settings.admin_ids)}",
             f"• Name keywords: {len(settings.name_keywords_list)}",
             f"• Groq model: {settings.groq_model}",
             f"• Response chance: {settings.response_chance}%"

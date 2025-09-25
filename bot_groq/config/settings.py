@@ -12,6 +12,8 @@ class Settings(BaseSettings):
     groq_api_key: Optional[str] = Field(None, description="API ключ Groq")
     admin_token: Optional[str] = Field(None, description="Токен администратора")
     admin_ids: Set[int] = Field(default_factory=set, description="Множество ID администраторов")
+    debug: bool = Field(False, description="Режим отладки (расширенные логи)")
+    response_chance: int = Field(5, description="Вероятность ответить на любое сообщение (0-100)")
 
     # --- Validators ---
     @field_validator("bot_token", mode="before")
@@ -129,6 +131,16 @@ class Settings(BaseSettings):
     def telegram_token(self) -> str:
         """Алиас для совместимости."""
         return self.bot_token
+
+    @property
+    def response_probability(self) -> float:
+        """Плавающая вероятность ответа (0..1).
+        Если настроен response_chance – используем его.
+        Иначе fallback на auto_chime_prob (оставлено для обратной совместимости)."""
+        try:
+            return max(0.0, min(1.0, self.response_chance / 100.0))
+        except Exception:
+            return max(0.0, min(1.0, self.auto_chime_prob))
     
     @property 
     def is_production(self) -> bool:

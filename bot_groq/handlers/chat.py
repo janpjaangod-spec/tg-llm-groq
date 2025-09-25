@@ -7,8 +7,8 @@ import re
 
 from bot_groq.config.settings import settings
 from bot_groq.services.database import (
-    db_add_chat_message, db_load_person, db_save_person, 
-    db_get_chat_tail, db_get_last_activity
+    db_add_chat_message, db_load_person, db_save_person,
+    db_get_chat_tail, db_get_last_activity, log_chat_event
 )
 from bot_groq.services.llm import llm_text, ai_bit, post_filter
 from bot_groq.core.profiles import update_person_profile, person_prompt_addon
@@ -168,12 +168,13 @@ async def handle_text_message(message: Message):
     """Обработчик текстовых сообщений."""
     try:
         # Сохраняем сообщение в базу данных
-        db_add_chat_message(
+        log_chat_event(
             chat_id=message.chat.id,
             user_id=message.from_user.id,
             username=message.from_user.username or "",
             text=message.text or "",
-            timestamp=time.time()
+            timestamp=time.time(),
+            is_bot=False
         )
         
         # Обновляем профиль пользователя
@@ -191,12 +192,13 @@ async def handle_text_message(message: Message):
                 await message.reply(response)
                 
                 # Сохраняем ответ бота в историю
-                db_add_chat_message(
+                log_chat_event(
                     chat_id=message.chat.id,
                     user_id=bot_info.id,
                     username=bot_info.username,
                     text=response,
-                    timestamp=time.time()
+                    timestamp=time.time(),
+                    is_bot=True
                 )
         
     except Exception as e:

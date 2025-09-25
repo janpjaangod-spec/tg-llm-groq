@@ -95,6 +95,9 @@ def db_get_history(user_id: str) -> List[Dict[str, str]]:
     return [{"role": r, "content": t} for (r, t) in rows]
 
 def db_add_chat_message(chat_id: int, role: str, content: str, user_id: Optional[str] = None):
+    """Базовая внутренняя функция добавления сообщения в историю чата.
+    Используйте log_chat_event для гибкой записи из хендлеров.
+    """
     now = time.time()
     with closing(get_db_connection()) as conn:
         c = conn.cursor()
@@ -108,13 +111,30 @@ def db_add_chat_message(chat_id: int, role: str, content: str, user_id: Optional
                   (str(chat_id), now))
         conn.commit()
 
+def log_chat_event(*, chat_id: int, user_id: Optional[int] = None, username: Optional[str] = None,
+                   text: str = "", timestamp: Optional[float] = None, is_bot: bool = False, role: Optional[str] = None):
+    """Back-compat слой для старых вызовов.
+    Старые хендлеры вызывали db_add_chat_message с keyword аргументами (username, text, timestamp).
+    Мы приводим их к унифицированному формату и вызываем db_add_chat_message.
+    Параметр username пока не сохраняется (нет колонки) – при необходимости добавить миграцию.
+    """
+    if role is None:
+        # Простая эвристика: бот -> assistant, остальное -> user
+        role = "assistant" if is_bot else "user"
+    content = text or ""
+    db_add_chat_message(chat_id=chat_id, role=role, content=content, user_id=str(user_id) if user_id else None)
+
 def db_get_chat_tail(chat_id: int, limit: int) -> List[Dict[str, str]]:
+    """Возвращает последние сообщения чата.
+    Теперь дополнительно возвращаем user_id (если есть) для более богатого контекста.
+    В текущей схеме нет username, поэтому handlers должны сами восстанавливать имена при необходимости.
+    """
     with closing(get_db_connection()) as conn:
         c = conn.cursor()
-        c.execute("SELECT role, content FROM chat_history WHERE chat_id=? ORDER BY ts DESC LIMIT ?",
+        c.execute("SELECT role, content, user_id FROM chat_history WHERE chat_id=? ORDER BY ts DESC LIMIT ?",
                   (str(chat_id), limit))
         rows = c.fetchall()[::-1]
-    return [{"role": r, "content": t} for (r, t) in rows]
+    return [{"role": r, "content": t, "user_id": u} for (r, t, u) in rows]
 
 # ========= Simple memories =========
 def mem_add_user(user_id: str, value: str):
