@@ -119,7 +119,6 @@ with closing(sqlite3.connect(DB)) as conn:
         chat_id TEXT NOT NULL, user_id TEXT NOT NULL,
         profile_json TEXT NOT NULL, updated_ts REAL NOT NULL,
         PRIMARY KEY(chat_id,user_id))""")
-    # отношения «кто как с кем общается»
     c.execute("""CREATE TABLE IF NOT EXISTS relationship_profile(
         chat_id TEXT NOT NULL, user_id_a TEXT NOT NULL, user_id_b TEXT NOT NULL,
         score REAL NOT NULL,            # сила связи/аффинити (+ ближе, - токсичнее)
