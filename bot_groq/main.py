@@ -7,14 +7,22 @@ Telegram Bot Леха - Главный файл запуска
 import asyncio
 import logging
 import sys
+from contextlib import suppress
 from aiogram import Bot, Dispatcher
 from aiogram.client.default import DefaultBotProperties
 from aiogram.enums import ParseMode
-from aiogram.types import BotCommand, BotCommandScopeAllChatAdministrators, BotCommandScopeDefault
+from aiogram.types import (
+    BotCommand,
+    BotCommandScopeAllChatAdministrators,
+    BotCommandScopeDefault,
+    BotCommandScopeAllGroupChats,
+    BotCommandScopeAllPrivateChats,
+)
 
 # Импорты наших модулей
 from bot_groq.config import settings
 from bot_groq.services import initialize_database
+from bot_groq.services.database import db_get_settings, db_set_model
 from bot_groq.handlers import routers
 
 # Настройка логирования
@@ -107,38 +115,55 @@ async def on_startup(bot: Bot):
         logger.error(f"❌ Ошибка подключения к Telegram: {e}")
         raise
     
+    # Синхронизируем модель из ENV с моделью в БД (если пользователь сменил GROQ_MODEL)
+    try:
+        db_cfg = db_get_settings()
+        if db_cfg.get("model") != settings.groq_model:
+            db_set_model(settings.groq_model)
+            logger.info(f"🔁 Обновил модель в БД: {db_cfg.get('model')} -> {settings.groq_model}")
+    except Exception as e:
+        logger.warning(f"⚠️ Не удалось синхронизировать модель: {e}")
+
     # Отправляем стартовое сообщение
     await startup_message(bot)
 
-    # === Регистрация команд в меню ===
+    # === Регистрация команд (перекрываем старые scope) ===
     try:
         user_commands = [
             BotCommand(command="help", description="Справка"),
             BotCommand(command="info", description="О боте"),
             BotCommand(command="me", description="Мой профиль"),
             BotCommand(command="forget", description="Забыть меня"),
-            BotCommand(command="mood", description="Настроение бота"),
-            BotCommand(command="ask", description="Задать вопрос по делу"),
+            BotCommand(command="mood", description="Настроение"),
+            BotCommand(command="ask", description="Вопрос по делу"),
             BotCommand(command="random", description="Случайная фраза"),
             BotCommand(command="stats", description="Краткая статистика"),
             BotCommand(command="roast", description="Уничтожь меня"),
             BotCommand(command="compliment", description="Язвительный комплимент"),
             BotCommand(command="fortune", description="Мрачное предсказание"),
             BotCommand(command="bad_advice", description="Вредный совет"),
+            BotCommand(command="settings", description="Текущие настройки"),
         ]
-        admin_extra = [
+        admin_commands = user_commands + [
             BotCommand(command="who", description="Профиль пользователя"),
             BotCommand(command="set_mode", description="Режим бота"),
             BotCommand(command="clear_history", description="Очистить историю"),
             BotCommand(command="export_data", description="Экспорт данных"),
             BotCommand(command="global_stats", description="Глобальная статистика"),
-            BotCommand(command="debug", description="Отладка")
+            BotCommand(command="debug", description="Отладка"),
+            BotCommand(command="reload_settings", description="Reload ENV"),
         ]
-        # Пользовательские команды по умолчанию
+        # Сначала удаляем старые списки в более специфичных scope
+        for scope in (BotCommandScopeAllPrivateChats(), BotCommandScopeAllGroupChats(), BotCommandScopeAllChatAdministrators()):
+            with suppress(Exception):
+                await bot.delete_my_commands(scope=scope)
+        # Записываем новые
+        await bot.set_my_commands(user_commands, scope=BotCommandScopeAllPrivateChats())
+        await bot.set_my_commands(user_commands, scope=BotCommandScopeAllGroupChats())
+        await bot.set_my_commands(admin_commands, scope=BotCommandScopeAllChatAdministrators())
+        # И дублируем как default (на случай клиентов, которые читают только default)
         await bot.set_my_commands(user_commands, scope=BotCommandScopeDefault())
-        # Администраторы видят объединённый список
-        await bot.set_my_commands(user_commands + admin_extra, scope=BotCommandScopeAllChatAdministrators())
-        logger.info("✅ Команды бота зарегистрированы")
+        logger.info("✅ Команды бота зарегистрированы/обновлены")
     except Exception as e:
         logger.warning(f"⚠️ Не удалось зарегистрировать команды: {e}")
     

@@ -167,3 +167,26 @@ class Settings(BaseSettings):
 
 # Создаем единственный экземпляр настроек, который будет использоваться во всем приложении
 settings = Settings()
+
+def reload_settings() -> Settings:
+    """Перечитывает переменные окружения БЕЗ пересоздания ссылки на объект.
+    Это важно, т.к. остальные модули импортировали сам объект settings.
+    Возвращает обновлённый объект.
+    """
+    global settings
+    new_obj = Settings()
+    # Переносим данные в существующий экземпляр
+    for k, v in new_obj.__dict__.items():
+        if k.startswith("_"):  # внутренние атрибуты pydantic тоже обновим
+            try:
+                object.__setattr__(settings, k, v)
+            except Exception:
+                pass
+        else:
+            try:
+                object.__setattr__(settings, k, v)
+            except Exception:
+                pass
+    return settings
+
+__all__ = ["settings", "reload_settings", "Settings"]
