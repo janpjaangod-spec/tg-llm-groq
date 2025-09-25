@@ -7,6 +7,7 @@ Otherwise we just run the bot normally (worker mode).
 import asyncio
 import logging
 import os
+import sys
 from contextlib import suppress
 
 from bot_groq.main import main as run_bot
@@ -19,8 +20,20 @@ except Exception:  # pragma: no cover - if fastapi not installed
     FastAPI = None  # type: ignore
     uvicorn = None  # type: ignore
 
-logger = logging.getLogger("entrypoint")
 logging.basicConfig(level=logging.INFO, format='[%(asctime)s] %(levelname)s %(name)s: %(message)s')
+logger = logging.getLogger("entrypoint")
+
+print("[entrypoint] process starting Python", sys.version)
+print("[entrypoint] CWD=", os.getcwd())
+print("[entrypoint] LS root=", os.listdir('.'))
+print("[entrypoint] Key env vars snapshot:")
+for k in ["PORT", "BOT_TOKEN", "GROQ_API_KEY", "DB_NAME", "ENVIRONMENT", "PYTHONPATH"]:
+    v = os.getenv(k)
+    if v:
+        masked = v if len(v) < 12 or k in {"PORT", "ENVIRONMENT", "DB_NAME"} else v[:6] + "..." + v[-4:]
+    else:
+        masked = None
+    print(f"  - {k}={masked}")
 
 
 async def _bot_wrapper():
