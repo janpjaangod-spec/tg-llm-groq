@@ -59,19 +59,25 @@ async def should_respond(message: Message, bot_username: str) -> tuple[bool, str
     if any(re.search(pattern, text) for pattern in question_patterns):
         return True, "question_to_bot"
     
-    # Случайные ответы с заданной вероятностью
-    if random.randint(1, 100) <= settings.response_chance:
-        return True, "random_response"
-    
-    # AI-bit анализ (более умный анализ контекста). Асинхронно с таймаутом.
+    # Случайная реплика: не чаще чем указано и не сразу после собственного ответа
+    # Находим, когда бот писал последний раз – берём хвост и ищем роль assistant
     try:
-        import asyncio
-        bit = asyncio.create_task(ai_bit("roast", context=message.text or ""))
-        result = await asyncio.wait_for(bit, timeout=0.5)
-        if result and isinstance(result, str) and len(result) > 3:
-            return True, "ai_bit_trigger"
+        tail = db_get_chat_tail(message.chat.id, limit=8)
+        last_bot_ts = None
+        for m in reversed(tail):
+            if m.get("role") == "assistant":
+                last_bot_ts = m.get("ts") or 0
+                break
+        recent_bot = False
+        if last_bot_ts:
+            # Мы не сохраняем ts в db_get_chat_tail сейчас (нет поля), поэтому блок в дальнейшем можно расширить.
+            # Пока просто защищаемся от спама по вероятности.
+            recent_bot = False
+        if random.randint(1, 100) <= settings.response_chance and not recent_bot:
+            return True, "random_response"
     except Exception:
-        pass
+        if random.randint(1,100) == 1:  # очень редкий fallback
+            return True, "random_response"
     
     return False, "no_trigger"
 

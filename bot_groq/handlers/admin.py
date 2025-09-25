@@ -546,7 +546,8 @@ async def cmd_model(message: Message):
     if len(parts) == 1:
         from bot_groq.services.database import db_get_settings
         cur = db_get_settings().get("model")
-        await message.reply(f"Текущая модель: {cur}\nИспользуй: /model <name>")
+        # Без угловых скобок, чтобы не ломать HTML parse_mode в глобальных настройках
+        await message.reply(f"Текущая модель: {cur}\nИспользуй: /model model_slug (см. /models)")
         return
     new_name = parts[1].strip()
     from bot_groq.services.llm import _normalize_model
