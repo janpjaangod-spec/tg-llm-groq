@@ -110,8 +110,8 @@ def db_add_chat_message(chat_id: int, role: str, content: str, user_id: Optional
     now = time.time()
     with closing(get_db_connection()) as conn:
         c = conn.cursor()
-    c.execute("INSERT INTO chat_history (chat_id, role, content, ts, user_id, username) VALUES (?,?,?,?,?,?)",
-          (str(chat_id), role, content, now, str(user_id) if user_id else None, username))
+        c.execute("INSERT INTO chat_history (chat_id, role, content, ts, user_id, username) VALUES (?,?,?,?,?,?)",
+                  (str(chat_id), role, content, now, str(user_id) if user_id else None, username))
         c.execute("""DELETE FROM chat_history WHERE chat_id=? AND rowid NOT IN
                      (SELECT rowid FROM chat_history WHERE chat_id=? ORDER BY ts DESC LIMIT 200)""",
                   (str(chat_id), str(chat_id)))
