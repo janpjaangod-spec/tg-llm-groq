@@ -1,1 +1,1 @@
-worker: python bot_groq/entrypoint.py
+web: python bot_groq/entrypoint.py
