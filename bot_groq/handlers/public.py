@@ -5,11 +5,37 @@ import random
 import time
 
 from bot_groq.config.settings import settings
+from bot_groq.config.settings import reload_settings
 from bot_groq.services.database import db_load_person, db_save_person, db_get_chat_tail
 from bot_groq.services.llm import llm_text
 from bot_groq.core.profiles import get_user_profile_for_display
 
 router = Router()
+
+def _mask(s: str|None) -> str:
+    if not s: return "—"
+    return s[:4] + "…" + s[-4:] if len(s) > 10 else "***"
+
+@router.message(Command("settings"))
+async def cmd_settings_view(message: Message):
+    """Показывает основные текущие настройки (без чувствительных токенов)."""
+    from bot_groq.config import settings
+    lines = [
+        "⚙️ <b>Текущие настройки</b>",
+        f"Модель: {settings.groq_model}",
+        f"Vision: {settings.groq_vision_model}",
+        f"Ответ шанс: {settings.response_chance}%", 
+        f"ShortMode: {'on' if settings.reply_short_mode else 'off'} / max_tokens={settings.reply_max_tokens}",
+        f"History turns: {settings.history_turns}",
+        f"Spice: {settings.spice_level}",
+        f"Timezone: {settings.timezone}",
+        f"Env: {settings.environment}",
+        f"Admins: {len(settings.admin_ids)}", 
+    ]
+    await message.reply("\n".join(lines), parse_mode="HTML")
+
+def _is_admin(user_id: int) -> bool:
+    return user_id in settings.admin_ids
 
 @router.message(Command("start", "help"))
 async def cmd_help(message: Message):
@@ -235,6 +261,40 @@ async def cmd_random(message: Message):
     ]
     
     await message.reply(random.choice(random_phrases))
+
+@router.message(Command("settings"))
+async def cmd_settings(message: Message):
+    """Показывает основные настройки (без секретов)."""
+    try:
+        data = [
+            f"Env: {settings.environment}",
+            f"Log: {settings.log_level}",
+            f"Model: {settings.groq_model}",
+            f"Vision: {settings.groq_vision_model}",
+            f"ResponseChance: {settings.response_chance}%", 
+            f"AutoChimeProb: {settings.auto_chime_prob}",
+            f"HistoryTurns: {settings.history_turns}",
+            f"ReplyShort: {getattr(settings,'reply_short_mode',True)} max={getattr(settings,'reply_max_tokens',180)}", 
+            f"Timezone: {settings.timezone}",
+            f"QuietHours: {settings.quiet_hours_start}-{settings.quiet_hours_end}",
+            f"Spice: {settings.spice_level}",
+            f"Admins: {len(settings.admin_ids)}"
+        ]
+        await message.reply("⚙️ Настройки:\n" + "\n".join(data))
+    except Exception as e:
+        await message.reply(f"Не удалось показать настройки: {e}")
+
+@router.message(Command("reload_settings"))
+async def cmd_reload_settings(message: Message):
+    """Горячий перезахват настроек из ENV (только для админа)."""
+    if not _is_admin(message.from_user.id):
+        await message.reply("🚫 Только админ")
+        return
+    try:
+        reload_settings()
+        await message.reply("♻️ Настройки перечитаны из окружения")
+    except Exception as e:
+        await message.reply(f"❌ Ошибка reload: {e}")
 
 @router.message(Command("stats"))
 async def cmd_stats_public(message: Message):

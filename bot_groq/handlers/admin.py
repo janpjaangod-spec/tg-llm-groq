@@ -12,6 +12,8 @@ from bot_groq.services.database import (
 )
 from bot_groq.core.profiles import get_user_profile_for_display
 from bot_groq.core.relations import analyze_group_dynamics, get_group_tension_points
+from bot_groq.config import reload_settings as _reload_settings
+from bot_groq.services.database import db_set_model, db_get_settings
 
 router = Router()
 
@@ -346,3 +348,29 @@ async def cmd_debug(message: Message):
         
     except Exception as e:
         await message.reply(f"❌ Ошибка получения отладочной информации: {str(e)}")
+
+@router.message(Command("reload_settings"))
+async def cmd_reload_settings(message: Message):
+    """Горячий reload переменных окружения (главный админ)."""
+    primary_admin = next(iter(sorted(settings.admin_ids))) if settings.admin_ids else None
+    if message.from_user.id != primary_admin:
+        await message.reply("🚫 Только главный администратор")
+        return
+    try:
+        old_model = settings.groq_model
+        new_s = _reload_settings()
+        model_note = ""
+        try:
+            db_cfg = db_get_settings()
+            if db_cfg.get("model") != new_s.groq_model:
+                db_set_model(new_s.groq_model)
+                model_note = " (обновлена модель в БД)"
+        except Exception as db_e:
+            model_note = f" (не удалось синхронизировать модель: {db_e})"
+        await message.reply(
+            "🔄 Settings reloaded\n"
+            f"Model: {old_model} → {new_s.groq_model}{model_note}\n"
+            f"Chance={new_s.response_chance}% short={'on' if new_s.reply_short_mode else 'off'}"
+        )
+    except Exception as e:
+        await message.reply(f"❌ Reload error: {e}")
