@@ -47,7 +47,7 @@ def post_filter(text: str) -> str:
 
 async def llm_text(
     prompt_or_messages: Union[str, List[Dict[str, Any]]],
-    max_tokens: int = 512,
+    max_tokens: int = 0,
     temperature: float = 0.7,
     model: Optional[str] = None,
     system_prompt: Optional[str] = None,
@@ -71,6 +71,11 @@ async def llm_text(
             ]
         else:
             messages = prompt_or_messages
+        # Если max_tokens не задан (0) – берем из настроек
+        if not max_tokens:
+            from bot_groq.config.settings import settings as _s
+            max_tokens = min(1024, max(32, _s.reply_max_tokens))
+
         resp = get_groq_client().chat.completions.create(
             model=model,
             messages=messages,
@@ -78,7 +83,23 @@ async def llm_text(
             max_tokens=max_tokens
         )
         out = (resp.choices[0].message.content or "").strip()
-        return post_filter(clean_reply(out)) or "Пусто"
+        cleaned = post_filter(clean_reply(out)) or "Пусто"
+        # Укорачиваем если включен короткий режим: оставляем 1-2 предложения
+        from bot_groq.config.settings import settings as _s
+        if _s.reply_short_mode:
+            # Разделяем по точке/восклиц/вопрос. Берем первые предложения пока длина < 220 символов.
+            import re as _re
+            sentences = [s.strip() for s in _re.split(r'(?<=[.!?])\s+', cleaned) if s.strip()]
+            if sentences:
+                acc = []
+                total_len = 0
+                for s in sentences:
+                    acc.append(s)
+                    total_len += len(s)
+                    if total_len > 220 or len(acc) >= 2:
+                        break
+                cleaned = " " .join(acc)
+        return cleaned
     except Exception as e:
         return f"Ошибка LLM: {e}"
 

@@ -173,7 +173,7 @@ async def handle_sticker(message: Message):
             
             try:
                 sticker_prompt = f"Пользователь отправил стикер с эмодзи {emoji}. Прокомментируй это в токсичном стиле."
-                response = await llm_text(sticker_prompt, max_tokens=80)
+                response = await llm_text(sticker_prompt, max_tokens=0)
                 
                 if response:
                     await message.reply(response)
@@ -228,7 +228,7 @@ async def handle_gif(message: Message):
                     gif_prompt += f" с подписью '{message.caption}'"
                 gif_prompt += ". Прокомментируй это саркастично."
                 
-                response = await llm_text(gif_prompt, max_tokens=80)
+                response = await llm_text(gif_prompt, max_tokens=0)
                 
                 if response:
                     await message.reply(response)

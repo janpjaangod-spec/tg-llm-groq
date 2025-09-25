@@ -125,7 +125,7 @@ async def generate_contextual_response(message: Message, trigger_reason: str) ->
     full_prompt = "\n\n".join(prompt_parts)
     
     # Генерируем ответ
-    response = await llm_text(full_prompt, max_tokens=200)
+    response = await llm_text(full_prompt, max_tokens=0)
     
     if response:
         # Применяем пост-фильтр

@@ -14,6 +14,8 @@ class Settings(BaseSettings):
     admin_ids: Set[int] = Field(default_factory=set, description="Множество ID администраторов")
     debug: bool = Field(False, description="Режим отладки (расширенные логи)")
     response_chance: int = Field(5, description="Вероятность ответить на любое сообщение (0-100)")
+    reply_max_tokens: int = Field(180, description="Максимум токенов для обычного ответа")
+    reply_short_mode: bool = Field(True, description="Если True – по умолчанию короче: резкая первая мысль + обрезка")
 
     # --- Validators ---
     @field_validator("bot_token", mode="before")

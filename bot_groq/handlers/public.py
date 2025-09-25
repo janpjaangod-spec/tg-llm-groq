@@ -193,7 +193,7 @@ async def cmd_ask(message: Message):
         # Генерируем ответ через LLM
         prompt = f"Пользователь спрашивает: {question}\nОтветь в своем токсичном стиле, но по существу."
         
-        response = await llm_text(prompt, max_tokens=150)
+        response = await llm_text(prompt, max_tokens=0)
         
         if response:
             await message.reply(response)
@@ -288,7 +288,7 @@ async def handle_mentions(message: Message):
         # Генерируем ответ на упоминание
         prompt = f"Тебя упомянули в сообщении: '{message.text}'\nОтветь коротко в своем стиле."
         
-        response = await llm_text(prompt, max_tokens=100)
+        response = await llm_text(prompt, max_tokens=0)
         
         if response:
             await message.reply(response)
