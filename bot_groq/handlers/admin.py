@@ -537,3 +537,21 @@ async def cmd_admin_help(message: Message):
         "/set_mode <mode>","/debug","/forget_user (reply)"
     ]
     await message.reply("Админ команды:\n" + "\n".join(cmds))
+
+@router.message(Command("model"))
+async def cmd_model(message: Message):
+    if not is_admin(message.from_user.id):
+        return
+    parts = message.text.split(maxsplit=1)
+    if len(parts) == 1:
+        from bot_groq.services.database import db_get_settings
+        cur = db_get_settings().get("model")
+        await message.reply(f"Текущая модель: {cur}\nИспользуй: /model <name>")
+        return
+    new_name = parts[1].strip()
+    from bot_groq.services.llm import _normalize_model
+    norm = _normalize_model(new_name)
+    from bot_groq.services.database import db_set_model, db_runtime_set
+    db_set_model(norm)
+    db_runtime_set("groq_model", norm)
+    await message.reply(f"✅ Модель обновлена: {new_name} → {norm}")

@@ -136,6 +136,14 @@ async def llm_text(
             ]
         else:
             messages = prompt_or_messages
+            # Если в цепочке нет system - добавим актуальный
+            if not any(m.get("role") == "system" for m in messages):
+                try:
+                    from bot_groq.services.database import db_get_settings as _dbs2
+                    sys_now = _dbs2().get("system_prompt") or settings.default_system_prompt
+                except Exception:
+                    sys_now = settings.default_system_prompt
+                messages.insert(0, {"role": "system", "content": sys_now})
         # Если max_tokens не задан (0) – берем из настроек
         if not max_tokens:
             from bot_groq.config.settings import settings as _s

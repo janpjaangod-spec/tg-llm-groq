@@ -109,7 +109,12 @@ async def handle_photo(message: Message):
             if message.caption:
                 vision_prompt += f" Подпись к фото: '{message.caption}'"
             
-            response = await llm_vision(vision_prompt, temp_file_path)
+            # llm_vision синхронная и ждёт system_prompt, image_path, user_prompt
+            response = llm_vision(
+                system_prompt="Ты токсично комментируешь фотографии. Пиши по-русски, колко.",
+                image_url=temp_file_path,
+                user_prompt=vision_prompt
+            )
             
             if response:
                 await message.reply(response)
